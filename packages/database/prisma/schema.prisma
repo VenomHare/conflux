@@ -1,8 +1,153 @@
 // use prisma-8
 
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  EDITOR
+  COMMENTER
+  VIEWER
+}
+
+enum InvitationRole {
+  ADMIN
+  EDITOR
+  COMMENTER
+  VIEWER
+}
+
 model User {
-  id            String    @id @default(cuid(2))
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
+  id            Uuid      @id @default(uuid())
+  name          String
+  email         String    @unique
+  password_hash String
+  avatar_url    String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @default(now())
+
+  owned_workspaces Workspace[]       @relation("WorkspaceOwner")
+  memberships      WorkspaceMember[]
+  invitations      Invitation[]      @relation("InvitationSender")
+  created_pages    Page[]            @relation("PageCreator")
+  created_snapshots PageSnapshot[]   @relation("SnapshotCreator")
+  comments         Comment[]         @relation("CommentAuthor")
+}
+
+model Workspace {
+  id          Uuid      @id @default(uuid())
+  name        String
+  description String?
+  owner_id    Uuid
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @default(now())
+
+  owner       User              @relation("WorkspaceOwner", fields: [owner_id], references: [id], onDelete: Restrict)
+  members     WorkspaceMember[]
+  invitations Invitation[]
+  pages       Page[]
+
+  @@index([owner_id])
+}
+
+model WorkspaceMember {
+  id           Uuid          @id @default(uuid())
+  workspace_id Uuid
+  user_id      Uuid
+  role         WorkspaceRole
+  joined_at    DateTime      @default(now())
+
+  workspace Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([workspace_id, user_id])
+  @@index([workspace_id])
+  @@index([user_id])
+}
+
+model Invitation {
+  id           Uuid           @id @default(uuid())
+  workspace_id Uuid
+  invited_by   Uuid
+  email        String
+  token        String         @unique
+  role         InvitationRole
+  expires_at   DateTime
+  accepted_at  DateTime?
+  created_at   DateTime       @default(now())
+
+  workspace Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  inviter   User      @relation("InvitationSender", fields: [invited_by], references: [id], onDelete: Restrict)
+
+  @@index([workspace_id])
+  @@index([invited_by])
+  @@index([created_at])
+}
+
+model Page {
+  id           Uuid      @id @default(uuid())
+  workspace_id Uuid
+  title        String
+  created_by   Uuid
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @default(now())
+  deleted_at   DateTime?
+
+  workspace Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  creator   User      @relation("PageCreator", fields: [created_by], references: [id], onDelete: Restrict)
+  updates   PageUpdate[]
+  snapshots PageSnapshot[]
+  comments  Comment[]
+
+  @@index([workspace_id])
+  @@index([created_by])
+  @@index([created_at])
+}
+
+model PageUpdate {
+  id         Uuid     @id @default(uuid())
+  page_id    Uuid
+  update     Bytes
+  created_at DateTime @default(now())
+
+  page Page @relation(fields: [page_id], references: [id], onDelete: Cascade)
+
+  @@index([page_id])
+  @@index([created_at])
+}
+
+model PageSnapshot {
+  id             Uuid     @id @default(uuid())
+  page_id        Uuid
+  created_by     Uuid
+  document_state Bytes
+  label          String?
+  created_at     DateTime @default(now())
+
+  page    Page @relation(fields: [page_id], references: [id], onDelete: Cascade)
+  creator User @relation("SnapshotCreator", fields: [created_by], references: [id], onDelete: Restrict)
+
+  @@index([page_id])
+  @@index([created_by])
+  @@index([created_at])
+}
+
+model Comment {
+  id         Uuid      @id @default(uuid())
+  page_id    Uuid
+  author_id  Uuid
+  parent_id  Uuid?
+  content    String
+  anchor     Json
+  resolved_at DateTime?
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now())
+
+  page      Page      @relation(fields: [page_id], references: [id], onDelete: Cascade)
+  author    User      @relation("CommentAuthor", fields: [author_id], references: [id], onDelete: Restrict)
+  parent    Comment?  @relation("CommentThread", fields: [parent_id], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("CommentThread")
+
+  @@index([page_id])
+  @@index([author_id])
+  @@index([parent_id])
+  @@index([created_at])
 }
