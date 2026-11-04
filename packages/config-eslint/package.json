@@ -1,0 +1,16 @@
+{
+  "name": "@repo/eslint-config",
+  "version": "0.0.0",
+  "private": true,
+  "files": [
+    "library.js",
+    "next.js"
+  ],
+  "devDependencies": {
+    "@babel/core": "8.0.7",
+    "@babel/eslint-parser": "8.0.7",
+    "@next/eslint-plugin-next": "16.4.2",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-config-turbo": "2.11.10"
+  }
+}
