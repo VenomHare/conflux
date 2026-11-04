@@ -3,13 +3,13 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build", "generate"],
-      "env": ["DATABASE_URL"],
+      "env": ["DATABASE_URL", "AUTH_SECRET"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
     "check-types": {
       "dependsOn": ["^check-types", "generate"],
-      "env": ["DATABASE_URL"],
+      "env": ["DATABASE_URL", "AUTH_SECRET"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"]
     },
     "db:migrate:dev": {
@@ -34,7 +34,7 @@
     },
     "dev": {
       "dependsOn": ["generate"],
-      "env": ["DATABASE_URL"],
+      "env": ["DATABASE_URL", "AUTH_SECRET"],
       "cache": false,
       "persistent": true
     },
@@ -46,7 +46,7 @@
     },
     "lint": {
       "dependsOn": ["^lint"],
-      "env": ["DATABASE_URL"]
+      "env": ["DATABASE_URL", "AUTH_SECRET"]
     }
   }
 }

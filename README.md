@@ -46,6 +46,22 @@ cp .env.example apps/web/.env
 
 The example URL matches the local Compose credentials and database. Update `DATABASE_URL` in both files if you changed them or use a hosted database. These credentials are for local development only.
 
+Set `AUTH_SECRET` to a random value of at least 32 characters before using the authentication API. For example, run `openssl rand -base64 32` and replace the placeholder in your local environment file. Authentication responses return a bearer token; clients should send it as `Authorization: Bearer <token>` on protected routes. Tokens expire after 24 hours.
+
+For a browser client, store the returned token in local storage and attach it to protected requests:
+
+```ts
+localStorage.setItem("conflux_auth_token", token);
+
+fetch("/api/v1/auth/me", {
+  headers: {
+    Authorization: `Bearer ${localStorage.getItem("conflux_auth_token")}`,
+  },
+});
+```
+
+Local storage is accessible to JavaScript on the page, so protect the app against cross-site scripting and clear the token on sign-out.
+
 ### 4. Create the database schema
 
 Emit the Prisma ORM contract, then initialize an empty database:
