@@ -41,7 +41,11 @@ afterAll(async () => {
     for (const email of testEmails) {
       const user = await db.orm.public.User.where({ email }).first();
       if (user) {
-        await db.orm.public.Workspace.where({ owner_id: user.id }).delete();
+        // Remove workspaces before their owner so the owner FK cannot block cleanup.
+        const workspaces = await db.orm.public.Workspace.where({ owner_id: user.id }).all();
+        for (const workspace of workspaces) {
+          await db.orm.public.Workspace.where({ id: workspace.id }).delete();
+        }
         await db.orm.public.User.where({ email }).delete();
       }
     }
