@@ -39,7 +39,11 @@ afterAll(async () => {
   const db = await getDb();
   try {
     for (const email of testEmails) {
-      await db.orm.public.User.where({ email }).delete();
+      const user = await db.orm.public.User.where({ email }).first();
+      if (user) {
+        await db.orm.public.Workspace.where({ owner_id: user.id }).delete();
+        await db.orm.public.User.where({ email }).delete();
+      }
     }
   } finally {
     await db.close();

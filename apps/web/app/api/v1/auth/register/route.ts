@@ -1,7 +1,7 @@
 import { getDb } from "@repo/database";
 import { apiError, apiResponse, readJson } from "@/lib/api";
 import { createSession, hashPassword, toPublicUser } from "@/lib/auth";
-import { registerSchema } from "@/lib/auth-schemas";
+import { registerSchema } from "@/lib/schemas/auth";
 
 export const runtime = "nodejs";
 

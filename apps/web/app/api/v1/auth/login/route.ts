@@ -6,7 +6,7 @@ import {
   verifyPassword,
   verifyUnknownAccountPassword,
 } from "@/lib/auth";
-import { loginSchema } from "@/lib/auth-schemas";
+import { loginSchema } from "@/lib/schemas/auth";
 
 export const runtime = "nodejs";
 
