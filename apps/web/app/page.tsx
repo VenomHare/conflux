@@ -1,8 +1,9 @@
-import { db } from "@repo/database";
+import { getDb } from "@repo/database";
 
 export const dynamic = "force-dynamic";
 
 export default async function IndexPage() {
+  const db = await getDb();
   const users = await db.orm.public.User.all();
 
   return (

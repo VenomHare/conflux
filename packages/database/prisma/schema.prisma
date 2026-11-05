@@ -16,13 +16,13 @@ enum InvitationRole {
 }
 
 model User {
-  id            Uuid      @id @default(uuid())
+  id            Uuid             @id @default(uuid())
   name          String
-  email         String    @unique
+  email         String           @unique
   password_hash String
   avatar_url    String?
-  created_at    DateTime  @default(now())
-  updated_at    DateTime  @default(now())
+  created_at    TimestamptzString @default(now())
+  updated_at    TimestamptzString @default(now())
 
   owned_workspaces Workspace[]       @relation("WorkspaceOwner")
   memberships      WorkspaceMember[]
@@ -33,12 +33,12 @@ model User {
 }
 
 model Workspace {
-  id          Uuid      @id @default(uuid())
+  id          Uuid             @id @default(uuid())
   name        String
   description String?
   owner_id    Uuid
-  created_at  DateTime  @default(now())
-  updated_at  DateTime  @default(now())
+  created_at  TimestamptzString @default(now())
+  updated_at  TimestamptzString @default(now())
 
   owner       User              @relation("WorkspaceOwner", fields: [owner_id], references: [id], onDelete: Restrict)
   members     WorkspaceMember[]
@@ -49,11 +49,11 @@ model Workspace {
 }
 
 model WorkspaceMember {
-  id           Uuid          @id @default(uuid())
+  id           Uuid             @id @default(uuid())
   workspace_id Uuid
   user_id      Uuid
   role         WorkspaceRole
-  joined_at    DateTime      @default(now())
+  joined_at    TimestamptzString @default(now())
 
   workspace Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
@@ -64,15 +64,15 @@ model WorkspaceMember {
 }
 
 model Invitation {
-  id           Uuid           @id @default(uuid())
+  id           Uuid             @id @default(uuid())
   workspace_id Uuid
   invited_by   Uuid
   email        String
-  token        String         @unique
+  token        String           @unique
   role         InvitationRole
-  expires_at   DateTime
-  accepted_at  DateTime?
-  created_at   DateTime       @default(now())
+  expires_at   TimestamptzString
+  accepted_at  TimestamptzString?
+  created_at   TimestamptzString @default(now())
 
   workspace Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
   inviter   User      @relation("InvitationSender", fields: [invited_by], references: [id], onDelete: Restrict)
@@ -83,13 +83,13 @@ model Invitation {
 }
 
 model Page {
-  id           Uuid      @id @default(uuid())
+  id           Uuid             @id @default(uuid())
   workspace_id Uuid
   title        String
   created_by   Uuid
-  created_at   DateTime  @default(now())
-  updated_at   DateTime  @default(now())
-  deleted_at   DateTime?
+  created_at   TimestamptzString @default(now())
+  updated_at   TimestamptzString @default(now())
+  deleted_at   TimestamptzString?
 
   workspace Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
   creator   User      @relation("PageCreator", fields: [created_by], references: [id], onDelete: Restrict)
@@ -103,10 +103,10 @@ model Page {
 }
 
 model PageUpdate {
-  id         Uuid     @id @default(uuid())
+  id         Uuid             @id @default(uuid())
   page_id    Uuid
   update     Bytes
-  created_at DateTime @default(now())
+  created_at TimestamptzString @default(now())
 
   page Page @relation(fields: [page_id], references: [id], onDelete: Cascade)
 
@@ -115,12 +115,12 @@ model PageUpdate {
 }
 
 model PageSnapshot {
-  id             Uuid     @id @default(uuid())
+  id             Uuid             @id @default(uuid())
   page_id        Uuid
   created_by     Uuid
   document_state Bytes
   label          String?
-  created_at     DateTime @default(now())
+  created_at     TimestamptzString @default(now())
 
   page    Page @relation(fields: [page_id], references: [id], onDelete: Cascade)
   creator User @relation("SnapshotCreator", fields: [created_by], references: [id], onDelete: Restrict)
@@ -131,15 +131,15 @@ model PageSnapshot {
 }
 
 model Comment {
-  id         Uuid      @id @default(uuid())
+  id         Uuid             @id @default(uuid())
   page_id    Uuid
   author_id  Uuid
   parent_id  Uuid?
   content    String
   anchor     Json
-  resolved_at DateTime?
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now())
+  resolved_at TimestamptzString?
+  created_at  TimestamptzString @default(now())
+  updated_at  TimestamptzString @default(now())
 
   page      Page      @relation(fields: [page_id], references: [id], onDelete: Cascade)
   author    User      @relation("CommentAuthor", fields: [author_id], references: [id], onDelete: Restrict)

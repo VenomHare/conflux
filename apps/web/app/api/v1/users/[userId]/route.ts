@@ -1,4 +1,4 @@
-import { db } from "@repo/database";
+import { getDb } from "@repo/database";
 import { apiError, apiResponse } from "@/lib/api";
 import { getAuthenticatedUser, toPublicUser } from "@/lib/auth";
 
@@ -10,6 +10,7 @@ export async function GET(request: Request, context: { params: Promise<{ userId:
     if (!viewer) return apiError("unauthorized", "Sign in to continue", 401);
 
     const { userId } = await context.params;
+    const db = await getDb();
     const user = await db.orm.public.User.where({ id: userId }).first();
     if (!user) return apiError("not_found", "User not found", 404);
     return apiResponse({ user: toPublicUser(user) });

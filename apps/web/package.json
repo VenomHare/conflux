@@ -7,7 +7,8 @@
     "build": "next build",
     "check-types": "next typegen && tsc --noEmit",
     "start": "next start",
-    "lint": "eslint . --max-warnings 0"
+    "lint": "eslint . --max-warnings 0",
+    "test:api": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
     "@repo/database": "*",
@@ -15,6 +16,7 @@
     "next": "16.4.2",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "vitest": "^5.1.0",
     "yjs": "^13.6.33",
     "zod": "^4.6.7"
   },

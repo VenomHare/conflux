@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 import bcrypt from "bcrypt";
-import { db } from "@repo/database";
+import { getDb } from "@repo/database";
 
 const SESSION_TTL_SECONDS = 60 * 60 * 24;
 const BCRYPT_COST = 12;
@@ -78,6 +78,7 @@ export async function getAuthenticatedUser(request: Request): Promise<PublicUser
   const userId = getSessionUserId(request);
   if (!userId) return null;
 
+  const db = await getDb();
   const user = await db.orm.public.User.where({ id: userId }).first();
   if (!user) return null;
   return toPublicUser(user);
@@ -88,16 +89,16 @@ export function toPublicUser(user: {
   name: string;
   email: string;
   avatar_url: string | null;
-  created_at: { toString(): string };
-  updated_at: { toString(): string };
+  created_at: string;
+  updated_at: string;
 }): PublicUser {
   return {
     id: user.id,
     name: user.name,
     email: user.email,
     avatar_url: user.avatar_url,
-    created_at: user.created_at.toString(),
-    updated_at: user.updated_at.toString(),
+    created_at: user.created_at,
+    updated_at: user.updated_at,
   };
 }
 

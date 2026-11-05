@@ -1,4 +1,4 @@
-import { db } from "@repo/database";
+import { getDb } from "@repo/database";
 import { apiError, apiResponse, readJson } from "@/lib/api";
 import { createSession, hashPassword, toPublicUser } from "@/lib/auth";
 import { registerSchema } from "@/lib/auth-schemas";
@@ -15,6 +15,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    const db = await getDb();
     const existingUser = await db.orm.public.User.where({ email: parsed.data.email }).first();
     if (existingUser) {
       return apiError("email_unavailable", "An account with this email already exists", 409);

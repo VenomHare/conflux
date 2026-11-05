@@ -1,4 +1,4 @@
-import { db } from "@repo/database";
+import { getDb } from "@repo/database";
 import { apiError, apiResponse, readJson } from "@/lib/api";
 import { getAuthenticatedUser, toPublicUser } from "@/lib/auth";
 import { updateProfileSchema } from "@/lib/auth-schemas";
@@ -29,10 +29,11 @@ export async function PATCH(request: Request) {
   }
 
   try {
+    const db = await getDb();
     const updated = await db.orm.public.User.where({ id: currentUser.id }).update({
       ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
       ...(parsed.data.avatar_url !== undefined ? { avatar_url: parsed.data.avatar_url } : {}),
-      updated_at: Temporal.Now.instant(),
+      updated_at: new Date().toISOString(),
     });
 
     if (!updated) return apiError("not_found", "User account no longer exists", 404);

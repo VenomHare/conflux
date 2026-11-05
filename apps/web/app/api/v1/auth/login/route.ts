@@ -1,4 +1,4 @@
-import { db } from "@repo/database";
+import { getDb } from "@repo/database";
 import { apiError, apiResponse, readJson } from "@/lib/api";
 import {
   createSession,
@@ -20,6 +20,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    const db = await getDb();
     const user = await db.orm.public.User.where({ email: parsed.data.email }).first();
     const validPassword = user
       ? await verifyPassword(parsed.data.password, user.password_hash)
