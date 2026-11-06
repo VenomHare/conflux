@@ -394,8 +394,8 @@ Tabs shown at the top of both settings pages: **General | Members**.
 - **Members table**: avatar, name, email, role (select for Admin+, plain text otherwise), joined date, `⋯` (Remove member). Owner row has no menu and a fixed "Owner" badge. A user can't change their own role. Role change is optimistic with rollback on error. Remove opens a confirm dialog.
 - **Pending invitations** list (see backend gaps): email, role, expires in, `Copy link`, `Revoke`.
 
-### 7.9 Profile (dialog, not a page)
-Opened from the user menu. Fields: Name, Avatar URL (text input for MVP, no upload), email read-only. Saves with `PATCH /users/me`.
+### 7.9 `/w/[workspaceId]/settings/profile` — Profile
+Linked from the sidebar and user menu. Keep the page in the same restrained settings style. Include a profile photo upload (PNG, JPEG, WebP, or AVIF, up to 5 MB) stored in Cloudflare R2, editable name, and read-only email. Save profile details with `PATCH /users/me`.
 
 ### 7.10 Global states
 - `not-found.tsx`: "We couldn't find that page" + button back home.
@@ -654,4 +654,4 @@ The backend spec is missing a few things the UI needs. The frontend assumes thes
 
 ## 17. Explicitly out of scope for MVP
 
-Page nesting/folders, templates, images/files/tables/embeds, @mentions, notifications and inbox, trash/restore deleted pages, page-level permissions or public share links, full-text search across document bodies, export (PDF/Markdown), version diff highlighting, suggestion mode, emoji reactions, workspace avatars/logos, avatar upload, 2FA/OAuth, i18n, and real-time page-title sync.
+Page nesting/folders, templates, images/files/tables/embeds, @mentions, notifications and inbox, trash/restore deleted pages, page-level permissions or public share links, full-text search across document bodies, export (PDF/Markdown), version diff highlighting, suggestion mode, emoji reactions, workspace avatars/logos, 2FA/OAuth, i18n, and real-time page-title sync.

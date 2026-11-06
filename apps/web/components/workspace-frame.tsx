@@ -8,13 +8,14 @@ import { api, send } from "@/lib/client-api";
 
 type Workspace = { id: string; name: string; description: string | null; myRole: string };
 type Page = { id: string; title: string; created_at?: string; updated_at: string };
-type User = { id: string; name: string; email: string };
+type User = { id: string; name: string; email: string; avatar_url: string | null };
 type WorkspaceFrameState = {
   workspace: Workspace;
   setWorkspace: Dispatch<SetStateAction<Workspace>>;
   pages: Page[];
   setPages: Dispatch<SetStateAction<Page[]>>;
   user: User;
+  setUser: Dispatch<SetStateAction<User>>;
 };
 
 const WorkspaceFrameContext = createContext<WorkspaceFrameState | null>(null);
@@ -74,7 +75,7 @@ export function WorkspaceFrame({ children }: { children: ReactNode }) {
   }
 
   return (
-    <WorkspaceFrameContext.Provider value={{ workspace, setWorkspace, pages, setPages, user }}>
+    <WorkspaceFrameContext.Provider value={{ workspace, setWorkspace, pages, setPages, user, setUser }}>
       <div className="app">
         <Sidebar
           workspace={workspace}

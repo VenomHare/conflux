@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import {
   ArrowUpRight,
@@ -42,7 +43,7 @@ type Page = {
   created_at?: string;
   updated_at: string;
 };
-type User = { id: string; name: string; email: string };
+type User = { id: string; name: string; email: string; avatar_url?: string | null };
 const roleName = (role: string) => role.charAt(0) + role.slice(1).toLowerCase();
 const palette = [
   "#E11D48",
@@ -58,6 +59,19 @@ function colorFor(value: string) {
   let hash = 0;
   for (const char of value) hash = (hash * 31 + char.charCodeAt(0)) | 0;
   return palette[Math.abs(hash) % palette.length];
+}
+function avatarStyle(id: string, url?: string | null): CSSProperties {
+  const style: CSSProperties = { background: colorFor(id) };
+  if (!url) return style;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+      style.backgroundImage = `url("${parsed.href.replace(/["\\]/g, encodeURIComponent)}")`;
+      style.backgroundPosition = "center";
+      style.backgroundSize = "cover";
+    }
+  } catch {}
+  return style;
 }
 function initials(name: string) {
   return name
@@ -579,6 +593,14 @@ export function Sidebar({
           <span className="row-icon"><UsersRound {...iconProps} /></span>
           <span className="row-label">Members</span>
         </Link>
+        <Link
+          className="sidebar-row"
+          href={`/w/${workspaceId}/settings/profile`}
+          aria-current={pathname.endsWith("/profile") ? "page" : undefined}
+        >
+          <span className="row-icon"><UserRound {...iconProps} /></span>
+          <span className="row-label">Profile</span>
+        </Link>
         {["OWNER", "ADMIN"].includes(workspace.myRole) && (
           <Link
             className="sidebar-row"
@@ -605,9 +627,10 @@ export function Sidebar({
         >
           <span
             className="user-avatar"
-            style={{ background: colorFor(user?.id ?? "user") }}
+            style={avatarStyle(user?.id ?? "user", user?.avatar_url)}
+            aria-hidden="true"
           >
-            {initials(user?.name ?? "User")}
+            {user?.avatar_url ? null : initials(user?.name ?? "User")}
           </span>
           <span className="user-trigger-text">
             <span className="user-trigger-name">
@@ -627,13 +650,14 @@ export function Sidebar({
             <div className="menu-user">
               <span
                 className="user-avatar"
+                aria-hidden="true"
                 style={{
                   width: 32,
                   height: 32,
-                  background: colorFor(user?.id ?? "user"),
+                  ...avatarStyle(user?.id ?? "user", user?.avatar_url),
                 }}
               >
-                {initials(user?.name ?? "User")}
+                {user?.avatar_url ? null : initials(user?.name ?? "User")}
               </span>
               <span>
                 <span className="menu-user-name">
