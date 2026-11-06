@@ -22,7 +22,7 @@ export async function POST(request: Request, context: RouteContext) {
   if (!parsed.success) return apiError("validation_error", parsed.error.issues[0]?.message ?? "Invalid snapshot", 400);
   try {
     const updates = await access.db.orm.public.PageUpdate.where({ page_id: pageId }).all();
-    const state = combinePageUpdates(updates);
+    const state = combinePageUpdates(updates as unknown as { update: unknown }[]);
     const snapshot = await access.db.orm.public.PageSnapshot.create({
       page_id: pageId,
       created_by: access.user.id,

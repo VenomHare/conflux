@@ -17,6 +17,8 @@ export type PublicUser = {
   updated_at: string;
 };
 
+export type StoredUser = PublicUser & { password_hash: string };
+
 function secret(): string {
   const value = process.env.AUTH_SECRET;
   if (!value || value.length < 32 || value.startsWith("replace-with-")) {
@@ -40,9 +42,10 @@ export async function createSession(userId: string) {
 
 function getSessionUserId(request: Request): string | null {
   const authorization = request.headers.get("authorization");
-  if (!authorization?.startsWith("Bearer ")) return null;
-
-  const token = authorization.slice(7);
+  const cookieToken = request.headers.get("cookie")?.split(";").map((part) => part.trim())
+    .find((part) => part.startsWith("conflux_session="))?.slice("conflux_session=".length);
+  const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : cookieToken;
+  if (!token) return null;
   const separator = token.indexOf(".");
   if (separator < 1 || separator === token.length - 1) return null;
 
@@ -79,7 +82,7 @@ export async function getAuthenticatedUser(request: Request): Promise<PublicUser
   if (!userId) return null;
 
   const db = await getDb();
-  const user = await db.orm.public.User.where({ id: userId }).first();
+  const user = await db.orm.public.User.where({ id: userId }).first() as unknown as StoredUser | null;
   if (!user) return null;
   return toPublicUser(user);
 }

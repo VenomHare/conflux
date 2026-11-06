@@ -23,14 +23,14 @@ export async function POST(
       const target = new Y.Doc();
       Y.applyUpdate(target, snapshot.document_state);
       const updates = await tx.orm.public.PageUpdate.where({ page_id: pageId }).all();
-      const currentState = combinePageUpdates(updates);
+      const currentState = combinePageUpdates(updates as unknown as { update: unknown }[]);
       await tx.orm.public.PageSnapshot.create({
         page_id: pageId,
         created_by: access.user.id,
         document_state: currentState,
         label: "Before restore",
       });
-      const existingUpdates = await tx.orm.public.PageUpdate.where({ page_id: pageId }).all();
+      const existingUpdates = await tx.orm.public.PageUpdate.where({ page_id: pageId }).all() as unknown as { id: string }[];
       for (const update of existingUpdates) {
         if (typeof update.id !== "string") throw new Error("Stored page update has no id");
         await tx.orm.public.PageUpdate.where({ id: update.id }).delete();

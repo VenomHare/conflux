@@ -11,7 +11,7 @@ export async function GET(request: Request, context: { params: Promise<{ userId:
 
     const { userId } = await context.params;
     const db = await getDb();
-    const user = await db.orm.public.User.where({ id: userId }).first();
+    const user = await db.orm.public.User.where({ id: userId }).first() as unknown as Parameters<typeof toPublicUser>[0] | null;
     if (!user) return apiError("not_found", "User not found", 404);
     return apiResponse({ user: toPublicUser(user) });
   } catch (error) {

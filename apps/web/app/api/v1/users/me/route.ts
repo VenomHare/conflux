@@ -37,7 +37,7 @@ export async function PATCH(request: Request) {
     });
 
     if (!updated) return apiError("not_found", "User account no longer exists", 404);
-    return apiResponse({ user: toPublicUser(updated) });
+    return apiResponse({ user: toPublicUser(updated as unknown as Parameters<typeof toPublicUser>[0]) });
   } catch (error) {
     console.error("Profile update failed", error);
     return apiError("service_unavailable", "Profile update is temporarily unavailable", 503);

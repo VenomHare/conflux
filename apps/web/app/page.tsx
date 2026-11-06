@@ -1,15 +1,3 @@
-import { getDb } from "@repo/database";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default async function IndexPage() {
-  const db = await getDb();
-  const users = await db.orm.public.User.all();
-
-  return (
-    <div>
-      <h1>Hello World</h1>
-      <pre>{JSON.stringify(users, null, 2)}</pre>
-    </div>
-  );
-}
+export default function Home() { redirect("/w"); }

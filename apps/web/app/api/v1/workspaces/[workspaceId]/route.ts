@@ -26,7 +26,7 @@ export async function GET(request: Request, context: RouteContext) {
     const db = await getDb();
     const workspace = await db.orm.public.Workspace.where({ id: workspaceId }).first();
     if (!workspace) return apiError("not_found", "Workspace not found", 404);
-    return apiResponse({ workspace });
+    return apiResponse({ workspace: { ...workspace, myRole: access.membership.role } });
   } catch (error) {
     console.error("Workspace lookup failed", error);
     return apiError("service_unavailable", "Workspace details are temporarily unavailable", 503);

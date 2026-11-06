@@ -41,9 +41,10 @@ export async function GET(request: Request) {
   try {
     const db = await getDb();
     const memberships = await db.orm.public.WorkspaceMember.where({ user_id: user.id }).all();
-    const workspaces = await Promise.all(memberships.map(({ workspace_id }) =>
-      db.orm.public.Workspace.where({ id: workspace_id }).first(),
-    ));
+    const workspaces = await Promise.all(memberships.map(async ({ workspace_id, role }) => {
+      const workspace = await db.orm.public.Workspace.where({ id: workspace_id }).first();
+      return workspace ? { ...workspace, myRole: role } : null;
+    }));
     return apiResponse({ workspaces: workspaces.filter((workspace) => workspace !== null) });
   } catch (error) {
     console.error("Workspace list failed", error);
