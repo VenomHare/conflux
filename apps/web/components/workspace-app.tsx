@@ -1,8 +1,9 @@
 "use client";
-
+import * as Y from 'yjs'
+import { WebsocketProvider } from 'y-websocket'
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { api, send } from "@/lib/client-api";
 import { useWorkspaceFrame } from "@/components/workspace-frame";
 
@@ -396,6 +397,11 @@ export function PageDetail() {
   const [title, setTitle] = useState("");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [body, setBody] = useState("");
+  const yTextRef = useRef<Y.Text | null>(null);
+  const yDocRef = useRef<Y.Doc | null>(null);
+
+
   useEffect(() => {
     let active = true;
     api<{ page: Page }>(`/pages/${pageId}`)
@@ -414,6 +420,30 @@ export function PageDetail() {
       active = false;
     };
   }, [workspaceId, pageId]);
+  useEffect(() => {
+    const doc = new Y.Doc();
+    yDocRef.current = doc;
+    const wsProvider = new WebsocketProvider(
+      "ws://localhost:8008",
+      pageId,
+      doc,
+    );
+    const sharedText = doc.getText("content");
+    yTextRef.current = sharedText;
+
+    const syncBody = () => setBody(sharedText.toString());
+    syncBody();
+    sharedText.observe(syncBody);
+
+    return () => {
+      sharedText.unobserve(syncBody);
+      yTextRef.current = null;
+      yDocRef.current = null;
+      wsProvider.destroy();
+      doc.destroy();
+    };
+  }, [pageId]);
+
   async function save() {
     setStatus("Saving…");
     try {
@@ -445,56 +475,73 @@ export function PageDetail() {
   if (!page) return null;
   const editable = canEdit(workspace.myRole);
   return (
-      <section className="main">
-        <header className="topbar">
-          <div className="topbar-leading">
-            <div className="topbar-sidebar-toggle-slot" />
-            <div>
-              <Link href={`/w/${workspaceId}`}>{workspace.name}</Link>{" "}
-              <span className="muted">/</span> {title || "Untitled"}
-            </div>
+    <section className="main">
+      <header className="topbar">
+        <div className="topbar-leading">
+          <div className="topbar-sidebar-toggle-slot" />
+          <div>
+            <Link href={`/w/${workspaceId}`}>{workspace.name}</Link>{" "}
+            <span className="muted">/</span> {title || "Untitled"}
           </div>
-          <div className="top-actions">
-            <span className="status">{status}</span>
-            <Link className="secondary" href={`/w/${workspaceId}`}>
-              All pages
-            </Link>
-          </div>
-        </header>
-        <main className="content">
-          <div className="eyebrow">{editable ? "Page" : "View only"}</div>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void save();
+        </div>
+        <div className="top-actions">
+          <span className="status">{status}</span>
+          <Link className="secondary" href={`/w/${workspaceId}`}>
+            All pages
+          </Link>
+        </div>
+      </header>
+      <main className="content">
+        <div className="eyebrow">{editable ? "Page" : "View only"}</div>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save();
+          }}
+        >
+          <input
+            className="editor-title"
+            aria-label="Page title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            readOnly={!editable}
+            onBlur={(e) => {
+              if (editable && e.currentTarget.value !== page.title)
+                void save();
             }}
-          >
-            <input
-              className="editor-title"
-              aria-label="Page title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              readOnly={!editable}
-              onBlur={(e) => {
-                if (editable && e.currentTarget.value !== page.title)
-                  void save();
-              }}
-            />
-            <span className="muted">{status}</span>
-          </form>
-          <div
+          />
+          <span className="muted">{status}</span>
+          <textarea
+            value={body}
+            readOnly={!editable}
+            onChange={(event) => {
+
+              const sharedText = yTextRef.current;
+              const doc = yDocRef.current;
+              if (!sharedText || !doc) return;
+
+              doc.transact(() => {
+                sharedText.delete(0, sharedText.length);
+                sharedText.insert(0, event.target.value);
+              });
+            }}
             style={{
-              borderTop: "1px solid var(--border)",
+              // borderTop: "1px solid var(--border)",
+              border: "none",
+              background: "transparent",
+              outline: "none",
               marginTop: 30,
               paddingTop: 24,
+              textDecoration: "none",
+              width: "100%",
+              resize: "none",
+              height: "50svh",
+              minHeight: "fit-content"
             }}
           >
-            <p className="muted">
-              Your page is ready. The collaborative editor will be added in a
-              later step.
-            </p>
-          </div>
-        </main>
+          </textarea>
+        </form>
+      </main>
     </section>
   );
 }
