@@ -1,11 +1,11 @@
 "use client";
-import * as Y from 'yjs'
-import { WebsocketProvider } from 'y-websocket'
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { api, send } from "@/lib/client-api";
 import { useWorkspaceFrame } from "@/components/workspace-frame";
+import { Editor, EditorContent, useEditor, useEditorState } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
 
 type Workspace = {
   id: string;
@@ -16,6 +16,7 @@ type Workspace = {
 type Page = {
   id: string;
   title: string;
+  content: string;
   created_at?: string;
   updated_at: string;
 };
@@ -397,13 +398,15 @@ export function PageDetail() {
   const [title, setTitle] = useState("");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
-  const [body, setBody] = useState("");
-  const yTextRef = useRef<Y.Text | null>(null);
-  const yDocRef = useRef<Y.Doc | null>(null);
-
+  const [slashMenu, setSlashMenu] = useState(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadedEditorPage = useRef<string | null>(null);
 
   useEffect(() => {
     let active = true;
+    setPage(null);
+    setError("");
     api<{ page: Page }>(`/pages/${pageId}`)
       .then((p) => {
         if (active) {
@@ -420,29 +423,54 @@ export function PageDetail() {
       active = false;
     };
   }, [workspaceId, pageId]);
+  const editor = useEditor({
+    extensions: [StarterKit],
+    content: "",
+    editable: canEdit(workspace.myRole),
+    immediatelyRender: false,
+  });
   useEffect(() => {
-    const doc = new Y.Doc();
-    yDocRef.current = doc;
-    const wsProvider = new WebsocketProvider(
-      "ws://localhost:8008",
-      pageId,
-      doc,
-    );
-    const sharedText = doc.getText("content");
-    yTextRef.current = sharedText;
+    if (!editor || !page) return;
+    editor.setEditable(canEdit(workspace.myRole));
+    if (loadedEditorPage.current === page.id) return;
+    let content = "";
+    if (page.content) {
+      try {
+        content = JSON.parse(page.content);
+      } catch {
+        content = page.content;
+      }
+    }
+    editor.commands.setContent(content, { emitUpdate: false });
+    loadedEditorPage.current = page.id;
+  }, [editor, page, workspace.myRole]);
 
-    const syncBody = () => setBody(sharedText.toString());
-    syncBody();
-    sharedText.observe(syncBody);
-
-    return () => {
-      sharedText.unobserve(syncBody);
-      yTextRef.current = null;
-      yDocRef.current = null;
-      wsProvider.destroy();
-      doc.destroy();
+  useEffect(() => {
+    if (!editor || !page) return;
+    const onUpdate = () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      setStatus("Unsaved changes");
+      saveTimer.current = setTimeout(async () => {
+        try {
+          await api(`/pages/${pageId}`, send("PATCH", { content: JSON.stringify(editor.getJSON()) }));
+          setStatus("Saved");
+          if (statusTimer.current) clearTimeout(statusTimer.current);
+          statusTimer.current = setTimeout(() => setStatus(""), 2000);
+        } catch (e) {
+          setStatus(e instanceof Error ? e.message : "Could not save page");
+        }
+      }, 700);
     };
-  }, [pageId]);
+    editor.on("update", onUpdate);
+    return () => {
+      editor.off("update", onUpdate);
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [editor, page, pageId]);
+
+  useEffect(() => () => {
+    if (statusTimer.current) clearTimeout(statusTimer.current);
+  }, []);
 
   async function save() {
     setStatus("Saving…");
@@ -485,20 +513,20 @@ export function PageDetail() {
           </div>
         </div>
         <div className="top-actions">
-          <span className="status">{status}</span>
           <Link className="secondary" href={`/w/${workspaceId}`}>
             All pages
           </Link>
         </div>
       </header>
-      <main className="content">
-        <div className="eyebrow">{editable ? "Page" : "View only"}</div>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void save();
-          }}
-        >
+      <main className="page-editor-shell">
+        <div className="page-editor-toolbar-wrap">
+          <div className="page-editor-toolbar">
+            <EditorToolbar editor={editor} />
+            <span className="page-editor-save-status" aria-live="polite">{status || (editable ? "All changes saved" : "Read only")}</span>
+          </div>
+        </div>
+        <div className="page-editor-content">
+          <div className="page-editor-meta">{editable ? "A page in " : "Viewing in "}{workspace.name}</div>
           <input
             className="editor-title"
             aria-label="Page title"
@@ -510,38 +538,86 @@ export function PageDetail() {
                 void save();
             }}
           />
-          <span className="muted">{status}</span>
-          <textarea
-            value={body}
-            readOnly={!editable}
-            onChange={(event) => {
-
-              const sharedText = yTextRef.current;
-              const doc = yDocRef.current;
-              if (!sharedText || !doc) return;
-
-              doc.transact(() => {
-                sharedText.delete(0, sharedText.length);
-                sharedText.insert(0, event.target.value);
-              });
-            }}
-            style={{
-              // borderTop: "1px solid var(--border)",
-              border: "none",
-              background: "transparent",
-              outline: "none",
-              marginTop: 30,
-              paddingTop: 24,
-              textDecoration: "none",
-              width: "100%",
-              resize: "none",
-              height: "50svh",
-              minHeight: "fit-content"
-            }}
-          >
-          </textarea>
-        </form>
+          <div className="page-editor-writing-area">
+            {slashMenu && editable && editor && <SlashCommandMenu editor={editor} close={() => setSlashMenu(false)} />}
+            <EditorContent
+              editor={editor}
+              className="page-editor-prose"
+              onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+                if (!editor || !editable) return;
+                const { selection } = editor.state;
+                const emptyBlock = selection.empty && selection.$from.parent.isTextblock && selection.$from.parent.textContent.length === 0;
+                if (event.key === "/" && emptyBlock) {
+                  event.preventDefault();
+                  setSlashMenu(true);
+                } else if (event.key === "Escape") {
+                  setSlashMenu(false);
+                } else if (slashMenu && event.key !== "Shift") {
+                  setSlashMenu(false);
+                }
+              }}
+            />
+            {editor && <div className="page-editor-hint">Type <kbd>/</kbd> for blocks, or start writing…</div>}
+          </div>
+        </div>
       </main>
     </section>
   );
+}
+
+function EditorToolbar({ editor }: { editor: Editor | null }) {
+  const active = useEditorState({
+    editor,
+    selector: ({ editor: current }) => ({
+      bold: current?.isActive("bold") ?? false,
+      italic: current?.isActive("italic") ?? false,
+      strike: current?.isActive("strike") ?? false,
+      code: current?.isActive("code") ?? false,
+      heading: [1, 2, 3].find((level) => current?.isActive("heading", { level })) ?? 0,
+      bulletList: current?.isActive("bulletList") ?? false,
+      orderedList: current?.isActive("orderedList") ?? false,
+      blockquote: current?.isActive("blockquote") ?? false,
+      link: current?.isActive("link") ?? false,
+    }),
+  });
+  if (!editor || !active) return null;
+  const button = (label: string, title: string, selected: boolean, action: () => void) => (
+    <button type="button" className={`editor-tool${selected ? " is-active" : ""}`} aria-label={title} title={title} onMouseDown={(event) => event.preventDefault()} onClick={action}>{label}</button>
+  );
+  return <div className="editor-toolbar-controls" role="toolbar" aria-label="Text formatting">
+    {button("B", "Bold", active.bold, () => editor.chain().focus().toggleBold().run())}
+    {button("I", "Italic", active.italic, () => editor.chain().focus().toggleItalic().run())}
+    {button("S", "Strikethrough", active.strike, () => editor.chain().focus().toggleStrike().run())}
+    {button("</>", "Inline code", active.code, () => editor.chain().focus().toggleCode().run())}
+    <span className="editor-toolbar-divider" />
+    {button("H1", "Heading 1", active.heading === 1, () => editor.chain().focus().toggleHeading({ level: 1 }).run())}
+    {button("H2", "Heading 2", active.heading === 2, () => editor.chain().focus().toggleHeading({ level: 2 }).run())}
+    {button("•", "Bulleted list", active.bulletList, () => editor.chain().focus().toggleBulletList().run())}
+    {button("1.", "Numbered list", active.orderedList, () => editor.chain().focus().toggleOrderedList().run())}
+    {button("❝", "Quote", active.blockquote, () => editor.chain().focus().toggleBlockquote().run())}
+    {button("↗", "Add or edit link", active.link, () => {
+      const url = window.prompt("Paste a link");
+      if (url) editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+      else if (active.link) editor.chain().focus().extendMarkRange("link").unsetLink().run();
+    })}
+  </div>;
+}
+
+function SlashCommandMenu({ editor, close }: { editor: Editor; close: () => void }) {
+  const items = [
+    { label: "Text", detail: "Start writing with plain text", run: () => editor.chain().focus().setParagraph().run() },
+    { label: "Heading 1", detail: "Large section heading", run: () => editor.chain().focus().setHeading({ level: 1 }).run() },
+    { label: "Heading 2", detail: "Medium section heading", run: () => editor.chain().focus().setHeading({ level: 2 }).run() },
+    { label: "Bulleted list", detail: "Create a simple list", run: () => editor.chain().focus().toggleBulletList().run() },
+    { label: "Numbered list", detail: "Create a numbered list", run: () => editor.chain().focus().toggleOrderedList().run() },
+    { label: "Quote", detail: "Capture a quote", run: () => editor.chain().focus().toggleBlockquote().run() },
+    { label: "Code block", detail: "Display code with formatting", run: () => editor.chain().focus().toggleCodeBlock().run() },
+    { label: "Divider", detail: "Separate sections", run: () => editor.chain().focus().setHorizontalRule().run() },
+  ];
+  return <div className="slash-command-menu" role="menu" aria-label="Insert a block">
+    <div className="slash-command-heading">Add a block</div>
+    {items.map((item) => <button type="button" role="menuitem" key={item.label} onMouseDown={(event) => event.preventDefault()} onClick={() => { item.run(); close(); }}>
+      <span className="slash-command-icon">{item.label.slice(0, 1)}</span><span><strong>{item.label}</strong><small>{item.detail}</small></span>
+    </button>)}
+  </div>;
 }

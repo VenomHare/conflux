@@ -48,13 +48,14 @@ export async function PATCH(request: Request, context: RouteContext) {
     return apiError("forbidden", "You cannot update this page", 403);
   }
 
-  const input = await readJson(request);
-  if (input === null) return apiError("invalid_request", "Send a valid JSON request under 16 KB", 400);
+  const input = await readJson(request, 3_000_000);
+  if (input === null) return apiError("invalid_request", "Send a valid JSON request under 3 MB", 400);
   const parsed = updatePageSchema.safeParse(input);
   if (!parsed.success) return apiError("validation_error", parsed.error.issues[0]?.message ?? "Invalid page", 400);
   try {
     const page = await access.db.orm.public.Page.where({ id: pageId, deleted_at: null }).update({
-      title: parsed.data.title,
+      title: parsed.data.title ?? access.page.title,
+      content: parsed.data.content ?? access.page.content,
       updated_at: new Date().toISOString(),
     });
     if (!page) return apiError("not_found", "Page not found", 404);

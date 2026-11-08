@@ -86,6 +86,7 @@ model Page {
   id           Uuid             @id @default(uuid())
   workspace_id Uuid
   title        String
+  content      String           @default("")
   created_by   Uuid
   created_at   TimestamptzString @default(now())
   updated_at   TimestamptzString @default(now())

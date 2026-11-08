@@ -26,7 +26,7 @@ export function apiError(code: string, message: string, status: number) {
   );
 }
 
-export async function readJson(request: Request): Promise<unknown | null> {
+export async function readJson(request: Request, maxBytes = 16_384): Promise<unknown | null> {
   if (!request.headers.get("content-type")?.toLowerCase().includes("application/json")) {
     return null;
   }
@@ -41,7 +41,7 @@ export async function readJson(request: Request): Promise<unknown | null> {
       const { done, value } = await reader.read();
       if (done) break;
       totalBytes += value.byteLength;
-      if (totalBytes > 16_384) {
+      if (totalBytes > maxBytes) {
         await reader.cancel();
         return null;
       }

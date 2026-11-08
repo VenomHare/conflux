@@ -402,6 +402,13 @@ var contract_default = {
           },
           Page: {
             fields: {
+              content: {
+                nullable: false,
+                type: {
+                  codecId: "pg/text@1",
+                  kind: "scalar"
+                }
+              },
               created_at: {
                 nullable: false,
                 type: {
@@ -533,6 +540,9 @@ var contract_default = {
             },
             storage: {
               fields: {
+                content: {
+                  column: "content"
+                },
                 created_at: {
                   column: "created_at"
                 },
@@ -1452,6 +1462,15 @@ var contract_default = {
             },
             Page: {
               columns: {
+                content: {
+                  codecId: "pg/text@1",
+                  dataType: "pg/text",
+                  default: {
+                    kind: "literal",
+                    value: ""
+                  },
+                  nullable: false
+                },
                 created_at: {
                   codecId: "pg/timestamptz-string@1",
                   dataType: "pg/timestamptz",
@@ -2044,7 +2063,7 @@ var contract_default = {
         kind: "postgres-schema"
       }
     },
-    storageHash: "f73635e120bda3085690250807a4a8566b03195f63d941212e485dba6e8359b4"
+    storageHash: "fac88ae092e9d29dc6d0200383098b2892616abe3a0a8f4c797ae83af601d4c1"
   },
   execution: {
     executionHash: "5533a1044afe43121c1969c79ccebdd13b3850b4672af3aba2e649fe3929bb64",
