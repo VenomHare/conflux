@@ -398,7 +398,6 @@ export function PageDetail() {
   const [title, setTitle] = useState("");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
-  const [slashMenu, setSlashMenu] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadedEditorPage = useRef<string | null>(null);
@@ -539,25 +538,10 @@ export function PageDetail() {
             }}
           />
           <div className="page-editor-writing-area">
-            {slashMenu && editable && editor && <SlashCommandMenu editor={editor} close={() => setSlashMenu(false)} />}
             <EditorContent
               editor={editor}
               className="page-editor-prose"
-              onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-                if (!editor || !editable) return;
-                const { selection } = editor.state;
-                const emptyBlock = selection.empty && selection.$from.parent.isTextblock && selection.$from.parent.textContent.length === 0;
-                if (event.key === "/" && emptyBlock) {
-                  event.preventDefault();
-                  setSlashMenu(true);
-                } else if (event.key === "Escape") {
-                  setSlashMenu(false);
-                } else if (slashMenu && event.key !== "Shift") {
-                  setSlashMenu(false);
-                }
-              }}
             />
-            {editor && <div className="page-editor-hint">Type <kbd>/</kbd> for blocks, or start writing…</div>}
           </div>
         </div>
       </main>
@@ -603,21 +587,3 @@ function EditorToolbar({ editor }: { editor: Editor | null }) {
   </div>;
 }
 
-function SlashCommandMenu({ editor, close }: { editor: Editor; close: () => void }) {
-  const items = [
-    { label: "Text", detail: "Start writing with plain text", run: () => editor.chain().focus().setParagraph().run() },
-    { label: "Heading 1", detail: "Large section heading", run: () => editor.chain().focus().setHeading({ level: 1 }).run() },
-    { label: "Heading 2", detail: "Medium section heading", run: () => editor.chain().focus().setHeading({ level: 2 }).run() },
-    { label: "Bulleted list", detail: "Create a simple list", run: () => editor.chain().focus().toggleBulletList().run() },
-    { label: "Numbered list", detail: "Create a numbered list", run: () => editor.chain().focus().toggleOrderedList().run() },
-    { label: "Quote", detail: "Capture a quote", run: () => editor.chain().focus().toggleBlockquote().run() },
-    { label: "Code block", detail: "Display code with formatting", run: () => editor.chain().focus().toggleCodeBlock().run() },
-    { label: "Divider", detail: "Separate sections", run: () => editor.chain().focus().setHorizontalRule().run() },
-  ];
-  return <div className="slash-command-menu" role="menu" aria-label="Insert a block">
-    <div className="slash-command-heading">Add a block</div>
-    {items.map((item) => <button type="button" role="menuitem" key={item.label} onMouseDown={(event) => event.preventDefault()} onClick={() => { item.run(); close(); }}>
-      <span className="slash-command-icon">{item.label.slice(0, 1)}</span><span><strong>{item.label}</strong><small>{item.detail}</small></span>
-    </button>)}
-  </div>;
-}
