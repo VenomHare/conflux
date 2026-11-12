@@ -3,7 +3,7 @@ import postgres from "@prisma/orm-postgres/runtime";
 import postgresStatic from "@prisma/orm-postgres/static";
 import type { Contract } from "../generated/contract.d";
 import contractJson from "../generated/contract.json" with { type: "json" };
-import { Runtime } from "@prisma/orm-postgres/family-runtime";
+import type { Runtime } from "@prisma/orm-postgres/family-runtime";
 
 const staticContext = postgresStatic({
   contractJson,

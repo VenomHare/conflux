@@ -3,13 +3,13 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build", "generate"],
-      "env": ["DATABASE_URL", "AUTH_SECRET"],
+      "env": ["DATABASE_URL", "AUTH_SECRET", "NEXT_PUBLIC_COLLAB_URL"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
     "check-types": {
       "dependsOn": ["^check-types", "generate"],
-      "env": ["DATABASE_URL", "AUTH_SECRET"],
+      "env": ["DATABASE_URL", "AUTH_SECRET", "NEXT_PUBLIC_COLLAB_URL"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"]
     },
     "db:migrate:dev": {
@@ -34,7 +34,7 @@
     },
     "dev": {
       "dependsOn": ["generate"],
-      "env": ["DATABASE_URL", "AUTH_SECRET"],
+      "env": ["DATABASE_URL", "AUTH_SECRET", "NEXT_PUBLIC_COLLAB_URL"],
       "cache": false,
       "persistent": true
     },

@@ -40,6 +40,12 @@ export async function createSession(userId: string) {
   };
 }
 
+export function createWebSocketToken(userId: string) {
+  const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60;
+  const payload = Buffer.from(JSON.stringify({ sub: userId, exp: expiresAt })).toString("base64url");
+  return `${payload}.${sign(payload)}`;
+}
+
 function getSessionUserId(request: Request): string | null {
   const authorization = request.headers.get("authorization");
   const cookieToken = request.headers.get("cookie")?.split(";").map((part) => part.trim())

@@ -13,6 +13,8 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1163.0",
     "@repo/database": "*",
+    "@tiptap/extension-collaboration": "3.33.0",
+    "@tiptap/y-tiptap": "^3.3.0",
     "bcrypt": "^6.0.0",
     "lucide-react": "^1.70.0",
     "next": "16.4.2",

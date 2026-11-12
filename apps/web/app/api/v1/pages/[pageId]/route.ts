@@ -27,7 +27,10 @@ export async function GET(request: Request, context: RouteContext) {
   try {
     const access = await getAccessiblePage(request, pageId);
     if ("error" in access) return access.error;
-    return apiResponse({ page: access.page });
+    const hasCollaborativeUpdates = Boolean(
+      await access.db.orm.public.PageUpdate.where({ page_id: pageId }).first(),
+    );
+    return apiResponse({ page: access.page, hasCollaborativeUpdates });
   } catch (error) {
     console.error("Page lookup failed", error);
     return apiError("service_unavailable", "Page is temporarily unavailable", 503);

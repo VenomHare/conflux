@@ -1,11 +1,14 @@
 "use client";
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
-import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { api, send } from "@/lib/client-api";
 import { useWorkspaceFrame } from "@/components/workspace-frame";
 import { Editor, EditorContent, useEditor, useEditorState } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import { Collaboration } from "@tiptap/extension-collaboration";
+import { WebsocketProvider } from "y-websocket";
+import * as Y from "yjs";
 
 type Workspace = {
   id: string;
@@ -20,6 +23,7 @@ type Page = {
   created_at?: string;
   updated_at: string;
 };
+type PageSummary = Omit<Page, "content">;
 const canEdit = (role?: string) =>
   ["OWNER", "ADMIN", "EDITOR"].includes(role ?? "");
 function dateLabel(value: string) {
@@ -166,12 +170,12 @@ export function WorkspaceHome() {
   const [modal, setModal] = useState<"create" | "rename" | "delete" | null>(
     null,
   );
-  const [target, setTarget] = useState<Page | null>(null);
+  const [target, setTarget] = useState<PageSummary | null>(null);
   const [busy, setBusy] = useState(false);
   async function load() {
     setError("");
     try {
-      const list = await api<{ pages: Page[] }>(`/workspaces/${id}/pages`);
+      const list = await api<{ pages: PageSummary[] }>(`/workspaces/${id}/pages`);
       const sortedPages = list.pages.sort(
         (a, b) => +new Date(b.updated_at) - +new Date(a.updated_at),
       );
@@ -395,22 +399,28 @@ export function PageDetail() {
   const { workspaceId, pageId } = params;
   const { workspace, setPages } = useWorkspaceFrame();
   const [page, setPage] = useState<Page | null>(null);
+  const [hasCollaborativeUpdates, setHasCollaborativeUpdates] = useState(false);
   const [title, setTitle] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState("Connecting…");
+  const [titleStatus, setTitleStatus] = useState("");
+  const [editorReady, setEditorReady] = useState(false);
   const [error, setError] = useState("");
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const loadedEditorPage = useRef<string | null>(null);
+  const savedTitle = useRef("");
+  const ydoc = useMemo(() => new Y.Doc(), [pageId]);
 
   useEffect(() => {
     let active = true;
     setPage(null);
+    setEditorReady(false);
     setError("");
-    api<{ page: Page }>(`/pages/${pageId}`)
+    api<{ page: Page; hasCollaborativeUpdates: boolean }>(`/pages/${pageId}`)
       .then((p) => {
         if (active) {
           setPage(p.page);
+          setHasCollaborativeUpdates(p.hasCollaborativeUpdates);
           setTitle(p.page.title);
+          savedTitle.current = p.page.title;
         }
       })
       .catch(
@@ -422,70 +432,109 @@ export function PageDetail() {
       active = false;
     };
   }, [workspaceId, pageId]);
+  const extensions = useMemo(() => [
+    StarterKit.configure({ undoRedo: false }),
+    Collaboration.configure({ document: ydoc }),
+  ], [ydoc]);
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions,
     content: "",
-    editable: canEdit(workspace.myRole),
+    editable: canEdit(workspace.myRole) && editorReady,
     immediatelyRender: false,
-  });
+  }, [ydoc]);
   useEffect(() => {
     if (!editor || !page) return;
-    editor.setEditable(canEdit(workspace.myRole));
-    if (loadedEditorPage.current === page.id) return;
-    let content = "";
-    if (page.content) {
-      try {
-        content = JSON.parse(page.content);
-      } catch {
-        content = page.content;
-      }
-    }
-    editor.commands.setContent(content, { emitUpdate: false });
-    loadedEditorPage.current = page.id;
-  }, [editor, page, workspace.myRole]);
+    editor.setEditable(canEdit(workspace.myRole) && editorReady);
+  }, [editor, page, workspace.myRole, editorReady]);
 
   useEffect(() => {
     if (!editor || !page) return;
-    const onUpdate = () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      setStatus("Unsaved changes");
-      saveTimer.current = setTimeout(async () => {
-        try {
-          await api(`/pages/${pageId}`, send("PATCH", { content: JSON.stringify(editor.getJSON()) }));
-          setStatus("Saved");
-          if (statusTimer.current) clearTimeout(statusTimer.current);
-          statusTimer.current = setTimeout(() => setStatus(""), 2000);
-        } catch (e) {
-          setStatus(e instanceof Error ? e.message : "Could not save page");
-        }
-      }, 700);
-    };
-    editor.on("update", onUpdate);
+    let disposed = false;
+    let provider: WebsocketProvider | null = null;
+    setStatus("Connecting…");
+
+    const serverUrl = (
+      process.env.NEXT_PUBLIC_COLLAB_URL ??
+      `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.hostname}:8008`
+    ).replace(/\/+$/, "");
+    const canEditPage = canEdit(workspace.myRole);
+
+    // Seed documents that predate Yjs before connecting. This lets editors
+    // continue working locally when the collaboration server is unavailable;
+    // Yjs will merge those edits when the provider reconnects.
+    if (!hasCollaborativeUpdates && ydoc.getXmlFragment("default").length === 0 && page.content) {
+      let content: string | Record<string, unknown> = page.content;
+      try {
+        content = JSON.parse(page.content) as Record<string, unknown>;
+      } catch {
+        // Keep legacy plain-text or HTML content as-is.
+      }
+      editor.commands.setContent(content as Parameters<typeof editor.commands.setContent>[0], { emitUpdate: false });
+    }
+    setEditorReady(true);
+    const tokenRefreshTimer = setInterval(() => {
+      void api<{ token: string }>("/auth/ws-token")
+        .then(({ token }) => {
+          if (!disposed && provider) provider.params = { ...provider.params, token };
+        })
+        .catch(() => {});
+    }, 50 * 60 * 1000);
+
+    void api<{ token: string }>("/auth/ws-token")
+      .then(({ token }) => {
+        if (disposed) return;
+        provider = new WebsocketProvider(serverUrl, pageId, ydoc, {
+          connect: false,
+          params: { token },
+          shouldReconnect: (event) => event.code !== 1008 && event.code !== 1003,
+        });
+        provider.on("status", ({ status: connectionStatus }) => {
+          if (disposed) return;
+          setStatus(!canEditPage && !hasCollaborativeUpdates ? "View only" :
+            connectionStatus === "connected" ? "Connected" :
+              connectionStatus === "connecting" ? "Connecting…" : "Offline");
+        });
+        provider.on("sync", (synced) => {
+          if (disposed || !synced) return;
+          if (!canEditPage && !hasCollaborativeUpdates) provider?.disconnect();
+          setStatus(canEditPage ? "Connected" : "View only");
+        });
+        provider.on("closed", ({ code, reason }) => {
+          if (!disposed) setStatus(`Connection rejected (${code}): ${reason || "request was rejected"}`);
+        });
+        provider.connect();
+      })
+      .catch(() => {
+        if (!disposed) setStatus("Offline");
+      });
+
     return () => {
-      editor.off("update", onUpdate);
-      if (saveTimer.current) clearTimeout(saveTimer.current);
+      disposed = true;
+      clearInterval(tokenRefreshTimer);
+      provider?.destroy();
     };
-  }, [editor, page, pageId]);
+  }, [editor, page, pageId, ydoc, workspace.myRole, hasCollaborativeUpdates]);
 
   useEffect(() => () => {
     if (statusTimer.current) clearTimeout(statusTimer.current);
   }, []);
 
   async function save() {
-    setStatus("Saving…");
+    setTitleStatus("Saving…");
     try {
       const result = await api<{ page: Page }>(
         `/pages/${pageId}`,
         send("PATCH", { title }),
       );
-      setPage(result.page);
+      savedTitle.current = result.page.title;
       setPages((current) =>
         current.map((item) => (item.id === pageId ? result.page : item)),
       );
-      setStatus("Saved");
-      setTimeout(() => setStatus(""), 2000);
+      setTitleStatus("Saved");
+      if (statusTimer.current) clearTimeout(statusTimer.current);
+      statusTimer.current = setTimeout(() => setTitleStatus(""), 2000);
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : "Could not save title");
+      setTitleStatus(e instanceof Error ? e.message : "Could not save title");
     }
   }
   if (error)
@@ -520,8 +569,8 @@ export function PageDetail() {
       <main className="page-editor-shell">
         <div className="page-editor-toolbar-wrap">
           <div className="page-editor-toolbar">
-            <EditorToolbar editor={editor} />
-            <span className="page-editor-save-status" aria-live="polite">{status || (editable ? "All changes saved" : "Read only")}</span>
+            <EditorToolbar editor={editorReady ? editor : null} />
+            <span className="page-editor-save-status" aria-live="polite">{titleStatus || (status === "Offline" ? status : editable ? status : "View only")}</span>
           </div>
         </div>
         <div className="page-editor-content">
@@ -533,7 +582,7 @@ export function PageDetail() {
             onChange={(e) => setTitle(e.target.value)}
             readOnly={!editable}
             onBlur={(e) => {
-              if (editable && e.currentTarget.value !== page.title)
+              if (editable && e.currentTarget.value !== savedTitle.current)
                 void save();
             }}
           />
