@@ -83,6 +83,95 @@ button:active {
   background: var(--bg-subtle);
   padding: 24px;
 }
+.error-screen {
+  min-height: 100vh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 18px;
+  padding: 32px 20px;
+  background: var(--bg-subtle);
+}
+.error-card {
+  width: min(100%, 520px);
+  padding: 36px 40px 38px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--bg);
+  box-shadow: var(--shadow-md);
+}
+.error-brand {
+  display: inline-block;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+.error-rule {
+  height: 1px;
+  margin: 26px 0 22px;
+  background: var(--border);
+}
+.error-code {
+  margin: 0 0 10px;
+  color: var(--text-faint);
+  font: 500 11px/16px var(--font-mono), var(--font-mono-fallback);
+  letter-spacing: 0.06em;
+}
+.error-card h1 {
+  margin: 0;
+  color: var(--text);
+  font: 400 38px/1.15 var(--font-serif), Georgia, serif;
+  letter-spacing: -0.025em;
+}
+.error-description {
+  max-width: 390px;
+  margin: 12px 0 0;
+  color: var(--text-muted);
+  line-height: 1.65;
+}
+.error-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 26px;
+}
+.error-home {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  box-shadow: var(--shadow-xs);
+  color: var(--text);
+  font-weight: 500;
+  transition: background-color 120ms ease-out, border-color 120ms ease-out;
+}
+.error-home:hover {
+  background: var(--bg-subtle);
+  border-color: color-mix(in srgb, var(--text-faint) 40%, var(--border));
+}
+.error-home span {
+  color: var(--text-faint);
+}
+.error-retry {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.error-retry:hover {
+  color: var(--text);
+}
+.error-footnote {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12px;
+}
 .auth-card {
   width: min(100%, 400px);
   background: var(--bg);
@@ -213,12 +302,15 @@ button:active {
   font-size: 13px;
 }
 .app {
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   display: flex;
 }
 .sidebar {
   width: 264px;
   flex: 0 0 264px;
+  min-height: 0;
   background: var(--bg-subtle);
   border-right: 1px solid var(--border);
   padding: 0 8px;
@@ -380,12 +472,15 @@ button:active {
 .kbd {
   height: 18px;
   min-width: 18px;
-  padding: 0 7px;
+  padding: 1px 7px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font:
-    500 11px/16px var(--font-mono),
+    500 11px/14px var(--font-mono),
     var(--font-mono-fallback);
   color: var(--text-muted);
   text-align: center;
@@ -714,6 +809,7 @@ button:active {
 .main {
   flex: 1;
   min-width: 0;
+  min-height: 0;
 }
 .topbar {
   height: 48px;
@@ -764,6 +860,10 @@ button:active {
 .top-actions {
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+.top-actions > .secondary {
+  display: inline-flex;
   align-items: center;
 }
 .content {
@@ -1232,11 +1332,14 @@ button:active {
   outline: none;
 }
 .page-editor-shell {
-  min-height: calc(100vh - 48px);
+  height: calc(100vh - 48px);
+  height: calc(100dvh - 48px);
+  min-height: 0;
+  overflow-y: auto;
 }
 .page-editor-toolbar-wrap {
   position: sticky;
-  top: 48px;
+  top: 0;
   z-index: 4;
   background: color-mix(in srgb, var(--bg) 94%, transparent);
   backdrop-filter: blur(12px);
@@ -1290,9 +1393,6 @@ button:active {
 .top-actions .is-active {
   background: var(--bg-muted);
   color: var(--text);
-}
-.editor-side-action {
-  display: none;
 }
 .page-side-panel {
   position: fixed;
@@ -1705,9 +1805,6 @@ button:active {
   border-radius: var(--radius-md);
 }
 @media (max-width: 1023px) {
-  .editor-side-action {
-    display: inline-flex;
-  }
   .page-side-panel {
     top: auto;
     width: 100%;
@@ -1775,6 +1872,12 @@ button:active {
 @media (max-width: 639px) {
   .auth-wrap {
     padding: 16px;
+  }
+  .error-card {
+    padding: 28px 24px 30px;
+  }
+  .error-card h1 {
+    font-size: 32px;
   }
   .auth-card {
     padding: 28px 24px;

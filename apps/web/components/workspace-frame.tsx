@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
+import { ErrorState } from "@/components/error-state";
 import { api, send } from "@/lib/client-api";
 
 type Workspace = {
@@ -109,10 +110,25 @@ export function WorkspaceFrame({ children }: { children: ReactNode }) {
   }
 
   if (!workspace || !user || loadedWorkspaceId !== workspaceId) {
+    const workspaceNotFound = error.toLowerCase().includes("not found");
     return error ? (
-      <main className="auth-wrap">
-        <div className="status">{error}</div>
-      </main>
+      <ErrorState
+        code={
+          workspaceNotFound
+            ? "WORKSPACE · NOT FOUND"
+            : "WORKSPACE · UNAVAILABLE"
+        }
+        title={
+          workspaceNotFound
+            ? "You look misdirected."
+            : "We couldn’t open this workspace."
+        }
+        description={
+          workspaceNotFound
+            ? "This workspace isn’t here, or you may not have access to it."
+            : error
+        }
+      />
     ) : null;
   }
 

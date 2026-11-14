@@ -30,6 +30,10 @@ export function PageDetail() {
   const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedTitle = useRef("");
   const ydoc = useMemo(() => new Y.Doc(), [pageId]);
+  const connectionDoc = useMemo(
+    () => (canEdit(workspace.myRole) ? ydoc : new Y.Doc()),
+    [workspace.myRole, ydoc],
+  );
 
   useEffect(() => {
     let active = true;
@@ -79,6 +83,10 @@ export function PageDetail() {
     if (!editor || !page) return;
     let disposed = false;
     let provider: WebsocketProvider | null = null;
+    let bridgeRemoteUpdates:
+      | ((update: Uint8Array, origin: unknown) => void)
+      | null = null;
+    let clearedLegacyContent = false;
     setStatus("Connecting…");
 
     const serverUrl = (
@@ -87,9 +95,9 @@ export function PageDetail() {
     ).replace(/\/+$/, "");
     const canEditPage = canEdit(workspace.myRole);
 
-    // Seed documents that predate Yjs before connecting. This lets editors
-    // continue working locally when the collaboration server is unavailable;
-    // Yjs will merge those edits when the provider reconnects.
+    // Seed legacy content into the editor document. Read-only sessions use a
+    // separate, empty document for WebSocket transport so this fallback never
+    // gets sent to the server.
     if (
       !hasCollaborativeUpdates &&
       ydoc.getXmlFragment("default").length === 0 &&
@@ -122,7 +130,7 @@ export function PageDetail() {
     void api<{ token: string }>("/auth/ws-token")
       .then(({ token }) => {
         if (disposed) return;
-        provider = new WebsocketProvider(serverUrl, pageId, ydoc, {
+        provider = new WebsocketProvider(serverUrl, pageId, connectionDoc, {
           connect: false,
           // Restores replace the document's CRDT history. A background tab
           // holding the pre-restore Y.Doc must not merge it back locally.
@@ -132,19 +140,30 @@ export function PageDetail() {
           shouldReconnect: (event) =>
             event.code !== 1008 && event.code !== 1003 && event.code !== 4401,
         });
+        bridgeRemoteUpdates = (update: Uint8Array, origin: unknown) => {
+          if (canEditPage || origin !== provider || disposed) return;
+          const fragment = ydoc.getXmlFragment("default");
+          if (!clearedLegacyContent) {
+            if (fragment.length > 0) fragment.delete(0, fragment.length);
+            clearedLegacyContent = true;
+          }
+          Y.applyUpdate(ydoc, update, provider);
+        };
+        if (!canEditPage)
+          connectionDoc.on("update", bridgeRemoteUpdates);
         provider.on("status", ({ status: connectionStatus }) => {
           console.log(
             `[restore] websocket status page=${pageId} status=${connectionStatus}`,
           );
           if (disposed) return;
           setStatus(
-            !canEditPage && !hasCollaborativeUpdates
-              ? "View only"
-              : connectionStatus === "connected"
+            connectionStatus === "connected"
+              ? canEditPage
                 ? "Connected"
-                : connectionStatus === "connecting"
-                  ? "Connecting…"
-                  : "Offline",
+                : "View only"
+              : connectionStatus === "connecting"
+                ? "Connecting…"
+                : "Offline",
           );
         });
         provider.on("sync", (synced) => {
@@ -152,7 +171,6 @@ export function PageDetail() {
             `[restore] browser sync page=${pageId} synced=${synced} stateVectorBytes=${Y.encodeStateVector(ydoc).byteLength} paragraphs=${ydoc.getXmlFragment("default").length} editorHtml=${editor.getHTML().slice(0, 120)}`,
           );
           if (disposed || !synced) return;
-          if (!canEditPage && !hasCollaborativeUpdates) provider?.disconnect();
           setStatus(canEditPage ? "Connected" : "View only");
         });
         provider.on("closed", ({ code, reason }) => {
@@ -182,9 +200,19 @@ export function PageDetail() {
     return () => {
       disposed = true;
       clearInterval(tokenRefreshTimer);
+      if (!canEditPage && bridgeRemoteUpdates)
+        connectionDoc.off("update", bridgeRemoteUpdates);
       provider?.destroy();
     };
-  }, [editor, page, pageId, ydoc, workspace.myRole, hasCollaborativeUpdates]);
+  }, [
+    connectionDoc,
+    editor,
+    page,
+    pageId,
+    ydoc,
+    workspace.myRole,
+    hasCollaborativeUpdates,
+  ]);
 
   useEffect(
     () => () => {
@@ -262,24 +290,6 @@ export function PageDetail() {
         <div className="page-editor-toolbar-wrap">
           <div className="page-editor-toolbar">
             <EditorToolbar editor={editorReady ? editor : null} />
-            <button
-              className="secondary editor-side-action"
-              type="button"
-              aria-expanded={panel === "comments"}
-              aria-controls="page-side-panel"
-              onClick={() => setPanel("comments")}
-            >
-              Comments
-            </button>
-            <button
-              className="secondary editor-side-action"
-              type="button"
-              aria-expanded={panel === "history"}
-              aria-controls="page-side-panel"
-              onClick={() => setPanel("history")}
-            >
-              History
-            </button>
             <span className="page-editor-save-status" aria-live="polite">
               {titleStatus ||
                 (status === "Offline"

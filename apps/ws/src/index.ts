@@ -89,8 +89,6 @@ type Room = {
   updatedAt: string;
   clients: Set<WebSocket>;
   canEdit: Map<WebSocket, boolean>;
-  pendingUpdates: Uint8Array[];
-  flushTimer: ReturnType<typeof setTimeout> | null;
   refreshTimer: ReturnType<typeof setInterval> | null;
   persistQueue: Promise<void>;
   stale: boolean;
@@ -198,8 +196,6 @@ async function evictStaleRoom(pageId: string, room: Room) {
     `[restore] stale room evicted page=${pageId} clients=${room.clients.size} persistedVectorBytes=${Y.encodeStateVector(room.persistedDoc).byteLength} liveVectorBytes=${Y.encodeStateVector(room.doc).byteLength}`,
   );
   if (room.refreshTimer) clearInterval(room.refreshTimer);
-  if (room.flushTimer) clearTimeout(room.flushTimer);
-  room.pendingUpdates.length = 0;
   rooms.delete(pageId);
   for (const client of room.clients) {
     if (client.readyState === WebSocket.OPEN)
@@ -244,8 +240,6 @@ async function loadRoom(pageId: string): Promise<Room | null> {
     updatedAt: pageUpdatedAt,
     clients: new Set(),
     canEdit: new Map(),
-    pendingUpdates: [],
-    flushTimer: null,
     refreshTimer: null,
     persistQueue: Promise.resolve(),
     stale: false,
@@ -307,22 +301,6 @@ async function loadRoom(pageId: string): Promise<Room | null> {
             client.close(1011, "Document persistence failed");
         }
       });
-
-    room.pendingUpdates.push(update);
-    if (room.flushTimer) clearTimeout(room.flushTimer);
-    room.flushTimer = setTimeout(() => {
-      room.flushTimer = null;
-      const pending = room.pendingUpdates.splice(0);
-      if (!pending.length) return;
-      const encoder = encoding.createEncoder();
-      encoding.writeVarUint(encoder, 0);
-      syncProtocol.writeUpdate(encoder, Y.mergeUpdates(pending));
-      const message = encoding.toUint8Array(encoder);
-      for (const client of room.clients) {
-        if (client !== origin && client.readyState === WebSocket.OPEN)
-          client.send(message);
-      }
-    }, 150);
   });
 
   // A restore replaces persisted updates outside this process. Compare the
@@ -438,7 +416,8 @@ ws.on("connection", async (socket, request) => {
         `[restore] websocket sync request page=${pageId} user=${userId} type=${syncMessageType} bytes=${toBytes(data).byteLength} stale=${room.stale}`,
       );
       if (!access.canEdit && syncMessageType !== 0) {
-        socket.close(1008, "Read only access");
+        // Ignore any client state from a view-only session, but keep the
+        // socket open so it can continue receiving updates from editors.
         return;
       }
 
@@ -447,6 +426,22 @@ ws.on("connection", async (socket, request) => {
       encoding.writeVarUint(encoder, 0);
       decoding.readVarUint(messageDecoder);
       syncProtocol.readSyncMessage(messageDecoder, encoder, room.doc, socket);
+      if (syncMessageType !== 0) {
+        const updateEncoder = encoding.createEncoder();
+        encoding.writeVarUint(updateEncoder, 0);
+        syncProtocol.writeUpdate(updateEncoder, Y.encodeStateAsUpdate(room.doc));
+        const updateMessage = encoding.toUint8Array(updateEncoder);
+        let peers = 0;
+        for (const client of room.clients) {
+          if (client !== socket && client.readyState === WebSocket.OPEN) {
+            client.send(updateMessage);
+            peers += 1;
+          }
+        }
+        console.log(
+          `[restore] live update broadcast page=${pageId} user=${userId} type=${syncMessageType} bytes=${updateMessage.byteLength} peers=${peers}`,
+        );
+      }
       await room.persistQueue;
       if (socket.readyState !== WebSocket.OPEN) return;
       const response = encoding.toUint8Array(encoder);
