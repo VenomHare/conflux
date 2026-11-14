@@ -1,110 +1,97 @@
-# Turborepo + Prisma ORM starter
+# Conflux
 
-This example helps you quickly set up a Turborepo monorepo with a Next.js app and Prisma ORM. It is community maintained. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed.
+Conflux is a collaborative workspace with workspaces, role-based membership,
+rich-text pages, comments, and version history. The web app is in `apps/web`,
+the Yjs WebSocket service is in `apps/ws`, and the Prisma ORM contract and
+database client are in `packages/database`.
 
-## What's inside?
+## Requirements
 
-This Turborepo includes the following packages and apps:
+- Node.js 26.12.1 or newer
+- Bun 1.4.0
+- Docker Compose, or a reachable PostgreSQL database
 
-- `web`: a [Next.js](https://nextjs.org/) app
-- `@repo/eslint-config`: shared ESLint flat configurations
-- `@repo/database`: [Prisma ORM](https://prisma.io/) for database access
-- `@repo/typescript-config`: shared `tsconfig.json` files
+## Local setup
 
-The example also uses TypeScript, Prettier, PostgreSQL, and Docker Compose. Prisma's current npm `latest` release is a Prisma ORM 8 release candidate, which uses contracts and the `db`/`migration` commands rather than the Prisma ORM 7 client workflow.
-
-## Getting started
-
-### 1. Create the project
-
-Use Node.js 26.12.1 or newer and pnpm 12.14.0 (pinned in `package.json`), and install Docker with Compose support.
+Install dependencies and create local environment files:
 
 ```sh
-bun dlx create-turbo@latest my-turborepo -e with-prisma
-cd my-turborepo
 bun install
+cp .env.example .env
+cp .env.example packages/database/.env
+cp .env.example apps/web/.env
 ```
 
-### 2. Start PostgreSQL
+The example environment uses local-only credentials. Change them before using
+the application outside local development. Set `AUTH_SECRET` to a random value
+of at least 32 characters; the placeholder in `.env.example` is rejected by
+the app. The WebSocket service reads the root `.env`; the database package and
+web app read their own `.env` files.
 
-The included [`docker-compose.yml`](./docker-compose.yml) starts PostgreSQL 18.6 with a database named `turborepo`:
+Start PostgreSQL and Redis for the local Compose setup:
 
 ```sh
 docker compose up -d
 ```
 
-To change the database name, update `POSTGRES_DB` in [`docker-compose.yml`](./docker-compose.yml). The named `database` volume persists data at PostgreSQL 18's `/var/lib/postgresql` mount point. Existing databases from older PostgreSQL major versions require a dump/restore or `pg_upgrade`; do not mount an older data directory directly into this container.
-
-### 3. Configure environment variables
-
-Copy the example environment file into the database package and web app:
-
-```sh
-cp .env.example packages/database/.env
-cp .env.example apps/web/.env
-```
-
-The example URL matches the local Compose credentials and database. Update `DATABASE_URL` in both files if you changed them or use a hosted database. These credentials are for local development only.
-
-For the low-cost deployment target, run one web app process and exactly one collaboration WebSocket process with a persistent PostgreSQL database. The collaboration service keeps active rooms in memory, so do not scale it to multiple replicas. Redis is optional and is only used as a cache; PostgreSQL remains the source of truth and the app should continue to work when Redis is not configured. Use a host that supports long-lived WebSocket connections and persistent processes rather than deploying the collaboration service as a serverless function.
-
-After updating the Prisma schema, apply the schema update before deploying the new application. For local development, run `bun db:push`. Automatic snapshots are disabled by default per page. A workspace Owner or Admin can enable them from that page's editor. The single collaboration process checks enabled pages every 15 minutes and keeps up to 20 automatic snapshots per page.
-
-Set `AUTH_SECRET` to a random value of at least 32 characters before using the authentication API. For example, run `openssl rand -base64 32` and replace the placeholder in your local environment file. Authentication responses return a bearer token; clients should send it as `Authorization: Bearer <token>` on protected routes. Tokens expire after 24 hours.
-
-For a browser client, store the returned token in local storage and attach it to protected requests:
-
-```ts
-localStorage.setItem("conflux_auth_token", token);
-
-fetch("/api/v1/auth/me", {
-  headers: {
-    Authorization: `Bearer ${localStorage.getItem("conflux_auth_token")}`,
-  },
-});
-```
-
-Local storage is accessible to JavaScript on the page, so protect the app against cross-site scripting and clear the token on sign-out.
-
-### 4. Create the database schema
-
-Emit the Prisma ORM contract, then initialize an empty database:
+Redis is optional and used only as a cache. PostgreSQL is the durable source of
+truth. Initialize the database contract and apply it locally:
 
 ```sh
 bun generate
-bun --filter @repo/database exec prisma db init
+bun db:push
 ```
 
-After editing the contract, apply development changes with `bun db:push` (also available as `bun db:migrate:dev`). Use `bun --filter @repo/database exec prisma migration plan` to create a migration and `bun db:migrate:deploy` to apply committed migrations. Database tasks always run uncached and generate the contract first.
-
-### 5. Seed the database
-
-Edit [`packages/database/src/seed.ts`](./packages/database/src/seed.ts), then run:
+Then start the web and collaboration services:
 
 ```sh
-bun db:seed
-```
-
-### 6. Build and run the application
-
-```sh
-bun build
 bun dev
 ```
 
-Contract generation is a Turbo dependency of build and development tasks, including when generated files are restored from cache. The web page queries PostgreSQL at request time, so the database must be running to view it.
+Open <http://localhost:3000>. The collaboration service listens on port 8008
+by default; set `NEXT_PUBLIC_COLLAB_URL` if it runs at another address.
 
-Open `http://localhost:3000` in your browser.
+## Current deployment limits
 
-Run `bun lint` for Next.js and environment-variable lint rules, and `bun check-types` for TypeScript checks. The shared flat ESLint configuration uses Babel to parse TypeScript without depending on the legacy TypeScript compiler API; the TypeScript 7 compiler checks types separately.
+Run one web app process and one long-lived collaboration WebSocket process.
+Active Yjs rooms are held in memory, so multiple collaboration replicas do not
+synchronize and are unsupported. The multi-instance Redis Pub/Sub requirement
+in `SPEC.md` is not implemented. Use a host that supports persistent processes
+and long-lived WebSocket connections; the collaboration service is not suitable
+for a serverless function.
 
-For a detailed walkthrough, see the [Prisma ORM documentation](https://www.prisma.io/docs/orm).
+Automatic snapshots are off by default for each page. Owners and Admins can
+enable them from a page's sidebar menu. The collaboration process checks for
+eligible pages every 30 seconds and keeps up to 20 automatic snapshots per
+page. It snapshots persisted document updates, so edits not yet committed to
+PostgreSQL are not included in that snapshot.
 
-## Useful links
+The current app does not persist offline edits in browser storage. A connected
+client can reconnect and synchronize its in-memory Yjs document, but edits are
+not guaranteed to survive a page reload or browser crash while offline.
+Comments use stored selection offsets and quoted text; anchors are not
+transformed as the document changes. Comment changes are not pushed to other
+open clients in real time.
 
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration options](https://turborepo.dev/docs/reference/configuration)
-- [CLI usage](https://turborepo.dev/docs/reference/command-line-reference)
+## Database and checks
+
+After changing the Prisma contract, use `bun db:push` for local development.
+For a deployment, generate a migration with the Prisma migration workflow and
+apply it with:
+
+```sh
+bun db:migrate:deploy
+```
+
+Other available commands:
+
+```sh
+bun build
+bun lint
+bun check-types
+bun db:seed
+```
+
+See [`SPEC.md`](./SPEC.md) for the product target, [`IMPLEMENTATION_PLAN.md`](./IMPLEMENTATION_PLAN.md)
+for planned work and scope decisions, and [`IMPLEMENTATION_REPORT.md`](./IMPLEMENTATION_REPORT.md)
+for the current implementation summary.

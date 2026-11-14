@@ -1,25 +1,14 @@
-## Getting Started
+# Conflux web app
 
-Follow the [root setup instructions](../../README.md) first to install dependencies, start PostgreSQL, configure both `.env` files, initialize the database, and seed it.
+Follow the repository [setup instructions](../../README.md) to install Bun
+dependencies, configure environment files, start PostgreSQL, apply the database
+contract, and run the web app together with the collaboration WebSocket service.
 
-From the repository root, run the development tasks (including contract generation):
+From the repository root, use `bun dev` for development. The Next.js app runs
+on port 3000 by default. It requires a reachable PostgreSQL database and a
+matching `AUTH_SECRET` with the collaboration service.
 
-```sh
-pnpm dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result. The page queries the database on each request.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-To create [Route Handlers](https://nextjs.org/docs/app/building-your-application/routing/route-handlers), add a `route.ts` file under `app/`. For example, `app/api/hello/route.ts` maps to [http://localhost:3000/api/hello](http://localhost:3000/api/hello).
-
-## Learn More
-
-- [Next.js Documentation](https://nextjs.org/docs)
-- [Learn Next.js](https://nextjs.org/learn)
-- [Next.js GitHub repository](https://github.com/vercel/next.js/)
-
-## Deploy on Vercel
-
-Deploy with [Vercel](https://vercel.com/new) or follow the [Next.js deployment documentation](https://nextjs.org/docs/app/getting-started/deploying). Configure `DATABASE_URL` for a reachable PostgreSQL database, and apply committed database migrations before serving requests. Never use the local Compose credentials in production.
+For deployment, keep the web app and one persistent collaboration process
+available to clients. The collaboration service keeps active rooms in memory
+and does not synchronize multiple replicas; see the root README for current
+deployment limits.

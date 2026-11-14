@@ -368,7 +368,11 @@ shadcn `Command` dialog. Input "Search pages…". Lists pages of the current wor
 
 ### 7.4 `/invite/[token]`
 - Fetch `GET /invitations/:token`.
-- States:
+- **Current backend limitation:** the endpoint requires the recipient to be
+  signed in with the invited email. Logged-out visitors currently see an
+  unavailable invitation state; the login/register handoff described below is
+  not implemented yet. The endpoint also does not return an inviter name.
+- **Desired flow after those backend gaps are addressed:**
   - **Valid, logged in as matching email:** card "You've been invited to **{workspace}** as **{role}** by {inviter}". Button "Accept invitation" → `POST /invitations/:token/accept` → redirect to `/w/:id`.
   - **Valid, logged out:** same card, with buttons "Log in" and "Create account" (both carry `next=/invite/:token`). Pre-fill email on register if the invitation email is known.
   - **Logged in with a different email:** warning "This invitation was sent to {email}. You're signed in as {current}." Buttons: "Log out and switch account".
@@ -468,6 +472,7 @@ On reconnect, show nothing extra; the indicator returns to "Saved".
 ### 8.7 Permissions inside the editor
 - Viewer/Commenter: `editor.setEditable(false)`; the cursor/selection still works for reading and for starting comments.
 - Handle the WS `PERMISSION_CHANGED` event: refetch workspace/member data; apply the new role immediately (toggle editability and toolbar), show a toast "Your role was changed to {role}". If access is lost entirely, redirect to the workspace home with a toast.
+- **Current backend limitation:** the collaboration service does not emit `PERMISSION_CHANGED`; it rechecks membership and role on open sockets every 15 seconds. Removal closes the socket, while a downgrade blocks document writes after the next check.
 - Handle WS auth failure/close code 4401/4403: show a full-page "You no longer have access" or redirect to login for 401.
 
 ### 8.8 Loading and error behavior for the editor
@@ -517,6 +522,10 @@ If an anchor can no longer be resolved (text deleted), the thread is shown as **
 On receiving `COMMENT_CREATED / UPDATED / RESOLVED` WS events, invalidate the comments query (TanStack Query) rather than hand-merging. Show a brief 1s background flash on the newly arrived card. Mutations are optimistic for resolve/reopen; creation shows a pending state on the card.
 
 If the optional app-level WS events are not wired up by the backend, fall back to polling `GET /pages/:id/comments` every 10s while the panel is open or any highlight is rendered (feature flag `NEXT_PUBLIC_COMMENTS_POLLING=true`).
+
+**Current implementation gap:** the backend does not emit these events and the
+comments panel does not poll. Other clients' comment changes appear only after
+the comments are loaded again.
 
 ---
 
@@ -634,21 +643,45 @@ Dynamic-import the editor and its extensions (`next/dynamic`, `ssr: false`) so n
 
 ---
 
-## 16. Backend gaps & assumptions (implement the frontend against these)
+## 16. Backend contracts and remaining gaps
 
-The backend spec is missing a few things the UI needs. The frontend assumes these will be added, and should code against them (use a typed mock in `lib/api.ts` behind a flag until they exist):
+This section records the current API behavior. The frontend should use the
+implemented contracts below; items marked as missing remain product gaps.
 
-1. **WebSocket auth token:** `GET /api/v1/auth/ws-token` → `{ token: string }` (short-lived JWT, ~5 min). The collaboration server is on a different origin, so the session cookie won't be sent. Frontend passes it as a `token` query param and refetches a fresh one before each (re)connect.
-2. **`myRole` on workspace endpoints:** `GET /workspaces` and `GET /workspaces/:id` include `myRole`.
-3. **Pending invitations list:** `GET /workspaces/:workspaceId/invitations` → invitations where `accepted_at` is null and not expired.
-4. **Invitation details payload** (`GET /invitations/:token`) includes: `workspace { id, name }`, `invitedBy { name }`, `email`, `role`, `status` ("valid" | "expired" | "accepted" | "revoked").
-5. **Snapshot detail** returns `document_state` as a **base64 string** plus `created_by { id, name, avatar_url }` and `label`. The snapshot list returns the same metadata **without** `document_state`.
-6. **Page list/detail** includes `updated_at`; page detail includes `created_by { name }`.
-7. **Comment payloads** include `author { id, name, avatar_url }`; the comment list returns root comments with their replies nested under `replies`.
-8. **Restore signal:** after a restore, the collab server closes active connections for that room with close code `4000` and reason `"restored"` so clients recreate the provider.
-9. **Page titles are not part of the Yjs document**, so title changes by one user show up for others after a refetch (window focus, or on `PERMISSION_CHANGED`/page-level events if added later). Accepted limitation for MVP.
-10. **Pages are a flat list** (no nesting) because the schema has no `parent_id`.
-11. **Email delivery for invitations may not exist**, so the UI always exposes the invite link for manual sharing.
+1. **WebSocket auth token — implemented.** `GET /api/v1/auth/ws-token` returns
+   `{ token }`. It is a signed HMAC token accepted by the collaboration
+   service, expires after one hour, and is sent as a `token` query parameter.
+   The editor refreshes its provider token every 50 minutes while open.
+2. **`myRole` on workspace endpoints — implemented.** `GET /workspaces` and
+   `GET /workspaces/:id` include `myRole`.
+3. **Pending invitation list — missing.** There is no
+   `GET /workspaces/:workspaceId/invitations`; the endpoint currently supports
+   invitation creation and revocation only.
+4. **Invitation details — partial.** `GET /invitations/:token` requires a
+   signed-in user whose email matches a usable invitation. It returns
+   `invitation { id, email, role, expires_at }` and `workspace { id, name }`.
+   It does not return the inviter or a status field; expired, accepted, or
+   mismatched invitations are not exposed as status-bearing details.
+5. **Snapshots — partial.** Snapshot detail returns `document_state` as a
+   base64 string and the scalar `created_by` user ID. Snapshot lists omit the
+   document state and include a public `author { id, name, avatar_url }`.
+6. **Pages — partial.** Page list/detail responses include `updated_at` and
+   the scalar `created_by` ID; they do not include a nested creator object.
+7. **Comments — partial.** The comment list returns a flat array with public
+   author fields; clients build threads from `parent_id`. There is no
+   pagination, live comment event, or polling in the current comments panel.
+   Anchors are stored selection offsets and quoted text, not Yjs-relative
+   positions.
+8. **Restore signal — implemented.** When the collaboration process detects a
+   replaced document, it closes room connections with code `4401` and reason
+   `"Document restored"` so clients reconnect to the restored state.
+9. **Page titles are not part of the Yjs document.** Other clients need to
+   refetch page metadata to see a title change; there is no page-level event.
+10. **Pages are a flat list** because the schema has no `parent_id`.
+11. **Invitation email delivery is not implemented.** The UI exposes the
+   invitation link for manual sharing. Invitation detail lookup also requires
+   the recipient to be signed in, so logged-out invite acceptance is not
+   currently supported.
 
 ---
 
