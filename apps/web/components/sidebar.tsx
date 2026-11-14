@@ -43,7 +43,12 @@ type Page = {
   created_at?: string;
   updated_at: string;
 };
-type User = { id: string; name: string; email: string; avatar_url?: string | null };
+type User = {
+  id: string;
+  name: string;
+  email: string;
+  avatar_url?: string | null;
+};
 const roleName = (role: string) => role.charAt(0) + role.slice(1).toLowerCase();
 const palette = [
   "#E11D48",
@@ -207,7 +212,7 @@ export function Sidebar({
     try {
       const { page } = await api<{ page: Page }>(
         `/workspaces/${workspaceId}/pages`,
-        send("POST", { title: "" }),
+        send("POST", { title: "Untitled" }),
       );
       onPagesChange([page, ...pages]);
       router.push(`/w/${workspaceId}/p/${page.id}`);
@@ -360,7 +365,9 @@ export function Sidebar({
               tabIndex={page.id === (activePageId ?? sorted[0]?.id) ? 0 : -1}
               onKeyDown={(event) => rowKey(event, index)}
             >
-              <span className="row-icon"><FileText {...iconProps} /></span>
+              <span className="row-icon">
+                <FileText {...iconProps} />
+              </span>
               <span
                 className="row-label"
                 style={{ color: page.title ? undefined : "var(--text-faint)" }}
@@ -408,7 +415,8 @@ export function Sidebar({
               {editable && (
                 <>
                   <button role="menuitem" onClick={() => beginRename(page)}>
-                    <Pencil {...iconProps} /> Rename <span className="switcher-role">F2</span>
+                    <Pencil {...iconProps} /> Rename{" "}
+                    <span className="switcher-role">F2</span>
                   </button>
                   <div className="menu-divider" />
                   <button
@@ -454,68 +462,76 @@ export function Sidebar({
             <span className="switcher-name">{workspace.name}</span>
             <ChevronDown className="switcher-chevron" {...iconProps} />
           </button>
-          {switcher && typeof document !== "undefined" && createPortal(
-            <div
-              className="switcher-menu menu-popover"
-              role="menu"
-              style={{ top: switcherPosition.top, left: switcherPosition.left }}
-            >
-              <div className="menu-label">Workspaces</div>
-              <div style={{ maxHeight: 216, overflowY: "auto" }}>
-                {workspaces.map((item) => (
-                  <button
-                    role="menuitem"
-                    key={item.id}
-                    onClick={() => router.push(`/w/${item.id}`)}
-                  >
-                    <span
-                      className="workspace-avatar"
-                      style={{
-                        width: 20,
-                        height: 20,
-                        background: colorFor(item.id),
-                      }}
-                    >
-                      {item.name.slice(0, 1).toUpperCase()}
-                    </span>
-                    <span className="row-label">{item.name}</span>
-                    <span className="switcher-role">
-                      {roleName(item.myRole)}
-                    </span>
-                    {item.id === workspaceId && (
-                      <Check {...iconProps} style={{ color: "var(--accent)" }} />
-                    )}
-                  </button>
-                ))}
-              </div>
-              <div className="menu-divider" />
-              <button
-                role="menuitem"
-                onClick={() => router.push("/onboarding")}
+          {switcher &&
+            typeof document !== "undefined" &&
+            createPortal(
+              <div
+                className="switcher-menu menu-popover"
+                role="menu"
+                style={{
+                  top: switcherPosition.top,
+                  left: switcherPosition.left,
+                }}
               >
-                <Plus {...iconProps} /> Create workspace
-              </button>
-              {["OWNER", "ADMIN"].includes(workspace.myRole) && (
-                <>
-                  <button
-                    role="menuitem"
-                    onClick={() =>
-                      router.push(`/w/${workspaceId}/settings/members`)
-                    }
-                  >
-                    <UserRoundPlus {...iconProps} /> Invite members
-                  </button>
-                  <button
-                    role="menuitem"
-                    onClick={() => router.push(`/w/${workspaceId}/settings`)}
-                  >
-                    <Settings {...iconProps} /> Workspace settings
-                  </button>
-                </>
-              )}
-            </div>,
-            document.body,
-          )}
+                <div className="menu-label">Workspaces</div>
+                <div style={{ maxHeight: 216, overflowY: "auto" }}>
+                  {workspaces.map((item) => (
+                    <button
+                      role="menuitem"
+                      key={item.id}
+                      onClick={() => router.push(`/w/${item.id}`)}
+                    >
+                      <span
+                        className="workspace-avatar"
+                        style={{
+                          width: 20,
+                          height: 20,
+                          background: colorFor(item.id),
+                        }}
+                      >
+                        {item.name.slice(0, 1).toUpperCase()}
+                      </span>
+                      <span className="row-label">{item.name}</span>
+                      <span className="switcher-role">
+                        {roleName(item.myRole)}
+                      </span>
+                      {item.id === workspaceId && (
+                        <Check
+                          {...iconProps}
+                          style={{ color: "var(--accent)" }}
+                        />
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <div className="menu-divider" />
+                <button
+                  role="menuitem"
+                  onClick={() => router.push("/onboarding")}
+                >
+                  <Plus {...iconProps} /> Create workspace
+                </button>
+                {["OWNER", "ADMIN"].includes(workspace.myRole) && (
+                  <>
+                    <button
+                      role="menuitem"
+                      onClick={() =>
+                        router.push(`/w/${workspaceId}/settings/members`)
+                      }
+                    >
+                      <UserRoundPlus {...iconProps} /> Invite members
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => router.push(`/w/${workspaceId}/settings`)}
+                    >
+                      <Settings {...iconProps} /> Workspace settings
+                    </button>
+                  </>
+                )}
+              </div>,
+              document.body,
+            )}
         </div>
         <button
           className="icon-button collapse-button"
@@ -536,7 +552,9 @@ export function Sidebar({
       <div className="sidebar-section">
         <div className="sidebar-rows">
           <button className="sidebar-row" onClick={() => setSearchOpen(true)}>
-            <span className="row-icon"><Search {...iconProps} /></span>
+            <span className="row-icon">
+              <Search {...iconProps} />
+            </span>
             <span className="row-label">Search</span>
             <kbd className="kbd">⌘K</kbd>
           </button>
@@ -545,7 +563,9 @@ export function Sidebar({
             href={`/w/${workspaceId}`}
             aria-current={pathname === `/w/${workspaceId}` ? "page" : undefined}
           >
-            <span className="row-icon"><House {...iconProps} /></span>
+            <span className="row-icon">
+              <House {...iconProps} />
+            </span>
             <span className="row-label">Home</span>
           </Link>
         </div>
@@ -590,7 +610,9 @@ export function Sidebar({
           href={`/w/${workspaceId}/settings/members`}
           aria-current={pathname.endsWith("/members") ? "page" : undefined}
         >
-          <span className="row-icon"><UsersRound {...iconProps} /></span>
+          <span className="row-icon">
+            <UsersRound {...iconProps} />
+          </span>
           <span className="row-label">Members</span>
         </Link>
         <Link
@@ -598,7 +620,9 @@ export function Sidebar({
           href={`/w/${workspaceId}/settings/profile`}
           aria-current={pathname.endsWith("/profile") ? "page" : undefined}
         >
-          <span className="row-icon"><UserRound {...iconProps} /></span>
+          <span className="row-icon">
+            <UserRound {...iconProps} />
+          </span>
           <span className="row-label">Profile</span>
         </Link>
         {["OWNER", "ADMIN"].includes(workspace.myRole) && (
@@ -607,7 +631,9 @@ export function Sidebar({
             href={`/w/${workspaceId}/settings`}
             aria-current={pathname.endsWith("/settings") ? "page" : undefined}
           >
-            <span className="row-icon"><Settings {...iconProps} /></span>
+            <span className="row-icon">
+              <Settings {...iconProps} />
+            </span>
             <span className="row-label">Settings</span>
           </Link>
         )}
@@ -640,72 +666,97 @@ export function Sidebar({
               {roleName(workspace.myRole)}
             </span>
           </span>
-          <ChevronDown className="switcher-chevron user-menu-chevron" {...iconProps} />
+          <ChevronDown
+            className="switcher-chevron user-menu-chevron"
+            {...iconProps}
+          />
         </button>
-        {userMenu && typeof document !== "undefined" && createPortal(
-          <div
-            className="sidebar-menu menu-popover"
-            style={{ bottom: userMenuPosition.bottom, left: userMenuPosition.left }}
-          >
-            <div className="menu-user">
-              <span
-                className="user-avatar"
-                aria-hidden="true"
-                style={{
-                  width: 32,
-                  height: 32,
-                  ...avatarStyle(user?.id ?? "user", user?.avatar_url),
-                }}
-              >
-                {user?.avatar_url ? null : initials(user?.name ?? "User")}
-              </span>
-              <span>
-                <span className="menu-user-name">
-                  {user?.name ?? "Your account"}
-                </span>
-                <br />
-                <span className="menu-user-email">{user?.email}</span>
-              </span>
-            </div>
-            <div className="menu-divider" />
-            <button
-              onClick={() => router.push(`/w/${workspaceId}/settings/profile`)}
-            >
-              <UserRound {...iconProps} /> Profile
-            </button>
-            <div className="theme-row">
-              <span>Theme</span>
-              <div className="theme-segment">
-                {[
-                  ["light", <Sun {...iconProps} />],
-                  ["dark", <Moon {...iconProps} />],
-                  ["system", <Monitor {...iconProps} />],
-                ].map(([name, icon]) => (
-                  <button
-                    key={name}
-                    className={theme === name ? "selected" : ""}
-                    aria-label={`${name} theme`}
-                    aria-pressed={theme === name}
-                    onClick={() => setThemeMode(name)}
-                  >
-                    {icon}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <button
-              onClick={() => {
-                setUserMenu(false);
-                setSearchOpen(true);
+        {userMenu &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              className="sidebar-menu menu-popover"
+              style={{
+                bottom: userMenuPosition.bottom,
+                left: userMenuPosition.left,
               }}
             >
-              <Keyboard {...iconProps} /> Keyboard shortcuts <span className="switcher-role">⌘/</span>
-            </button>
-            <div className="menu-divider" />
-            <button onClick={onLogout}><LogOut {...iconProps} /> Log out</button>
-          </div>,
-          document.body,
-        )}
+              <div className="menu-user">
+                <span
+                  className="user-avatar"
+                  aria-hidden="true"
+                  style={{
+                    width: 32,
+                    height: 32,
+                    ...avatarStyle(user?.id ?? "user", user?.avatar_url),
+                  }}
+                >
+                  {user?.avatar_url ? null : initials(user?.name ?? "User")}
+                </span>
+                <span>
+                  <span className="menu-user-name">
+                    {user?.name ?? "Your account"}
+                  </span>
+                  <br />
+                  <span className="menu-user-email">{user?.email}</span>
+                </span>
+              </div>
+              <div className="menu-divider" />
+              <button
+                onClick={() =>
+                  router.push(`/w/${workspaceId}/settings/profile`)
+                }
+              >
+                <UserRound {...iconProps} /> Profile
+              </button>
+              <div className="theme-row">
+                <span>Theme</span>
+                <div className="theme-segment">
+                  <button
+                    type="button"
+                    className={theme === "light" ? "selected" : ""}
+                    aria-label="Light theme"
+                    aria-pressed={theme === "light"}
+                    onClick={() => setThemeMode("light")}
+                  >
+                    <Sun {...iconProps} />
+                  </button>
+                  <button
+                    type="button"
+                    className={theme === "dark" ? "selected" : ""}
+                    aria-label="Dark theme"
+                    aria-pressed={theme === "dark"}
+                    onClick={() => setThemeMode("dark")}
+                  >
+                    <Moon {...iconProps} />
+                  </button>
+                  <button
+                    type="button"
+                    className={theme === "system" ? "selected" : ""}
+                    aria-label="Use system theme"
+                    aria-pressed={theme === "system"}
+                    onClick={() => setThemeMode("system")}
+                  >
+                    <Monitor {...iconProps} />
+                  </button>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setUserMenu(false);
+                  setSearchOpen(true);
+                }}
+              >
+                <Keyboard {...iconProps} /> Keyboard shortcuts{" "}
+                <span className="switcher-role">⌘/</span>
+              </button>
+              <div className="menu-divider" />
+              <button onClick={onLogout}>
+                <LogOut {...iconProps} /> Log out
+              </button>
+            </div>,
+            document.body,
+          )}
       </div>
     </aside>
   );
@@ -732,17 +783,19 @@ export function Sidebar({
           {sidebar}
         </div>
       )}
-      {collapsed && toggleHost && createPortal(
-        <button
-          className="icon-button desktop-sidebar-toggle"
-          aria-label="Open sidebar (⌘ \\)"
-          title="Open sidebar　⌘ \\"
-          onClick={toggleSidebar}
-        >
-          <PanelLeftOpen {...iconProps} />
-        </button>,
-        toggleHost,
-      )}
+      {collapsed &&
+        toggleHost &&
+        createPortal(
+          <button
+            className="icon-button desktop-sidebar-toggle"
+            aria-label="Open sidebar (⌘ \\)"
+            title="Open sidebar　⌘ \\"
+            onClick={toggleSidebar}
+          >
+            <PanelLeftOpen {...iconProps} />
+          </button>,
+          toggleHost,
+        )}
       {searchOpen && (
         <div
           className="modal-backdrop"
@@ -841,4 +894,3 @@ export function Sidebar({
     </>
   );
 }
-

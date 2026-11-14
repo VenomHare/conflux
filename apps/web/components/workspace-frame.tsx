@@ -6,9 +6,24 @@ import { useParams, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { api, send } from "@/lib/client-api";
 
-type Workspace = { id: string; name: string; description: string | null; myRole: string };
-type Page = { id: string; title: string; created_at?: string; updated_at: string };
-type User = { id: string; name: string; email: string; avatar_url: string | null };
+type Workspace = {
+  id: string;
+  name: string;
+  description: string | null;
+  myRole: string;
+};
+type Page = {
+  id: string;
+  title: string;
+  created_at?: string;
+  updated_at: string;
+};
+type User = {
+  id: string;
+  name: string;
+  email: string;
+  avatar_url: string | null;
+};
 type WorkspaceFrameState = {
   workspace: Workspace;
   setWorkspace: Dispatch<SetStateAction<Workspace>>;
@@ -22,7 +37,8 @@ const WorkspaceFrameContext = createContext<WorkspaceFrameState | null>(null);
 
 export function useWorkspaceFrame() {
   const value = useContext(WorkspaceFrameContext);
-  if (!value) throw new Error("useWorkspaceFrame must be used within WorkspaceFrame");
+  if (!value)
+    throw new Error("useWorkspaceFrame must be used within WorkspaceFrame");
   return value;
 }
 
@@ -33,7 +49,9 @@ export function WorkspaceFrame({ children }: { children: ReactNode }) {
   const [pages, setPages] = useState<Page[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState("");
-  const [loadedWorkspaceId, setLoadedWorkspaceId] = useState<string | null>(null);
+  const [loadedWorkspaceId, setLoadedWorkspaceId] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     let active = true;
@@ -53,7 +71,11 @@ export function WorkspaceFrame({ children }: { children: ReactNode }) {
       })
       .catch((reason) => {
         if (active)
-          setError(reason instanceof Error ? reason.message : "Workspace could not be loaded");
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "Workspace could not be loaded",
+          );
       });
     return () => {
       active = false;
@@ -66,6 +88,26 @@ export function WorkspaceFrame({ children }: { children: ReactNode }) {
     router.refresh();
   }
 
+  function updateWorkspace(nextWorkspace: SetStateAction<Workspace>) {
+    setWorkspace((currentWorkspace) => {
+      if (!currentWorkspace) return currentWorkspace;
+      if (typeof nextWorkspace === "function") {
+        return nextWorkspace(currentWorkspace);
+      }
+      return nextWorkspace;
+    });
+  }
+
+  function updateUser(nextUser: SetStateAction<User>) {
+    setUser((currentUser) => {
+      if (!currentUser) return currentUser;
+      if (typeof nextUser === "function") {
+        return nextUser(currentUser);
+      }
+      return nextUser;
+    });
+  }
+
   if (!workspace || !user || loadedWorkspaceId !== workspaceId) {
     return error ? (
       <main className="auth-wrap">
@@ -75,7 +117,16 @@ export function WorkspaceFrame({ children }: { children: ReactNode }) {
   }
 
   return (
-    <WorkspaceFrameContext.Provider value={{ workspace, setWorkspace, pages, setPages, user, setUser }}>
+    <WorkspaceFrameContext.Provider
+      value={{
+        workspace,
+        setWorkspace: updateWorkspace,
+        pages,
+        setPages,
+        user,
+        setUser: updateUser,
+      }}
+    >
       <div className="app">
         <Sidebar
           workspace={workspace}

@@ -534,7 +534,7 @@ Selecting a snapshot puts the editor area in **preview mode**:
 - Live editing, presence cursors and comments highlights are hidden while previewing. The live Yjs connection stays open in the background.
 
 ### 10.3 Restore
-- Click "Restore this version" → confirm dialog: "Restore this version? The current document will be saved as a new version first, so you can undo this." Buttons: Cancel, Restore.
+- Click "Restore this version" → confirm dialog: "Restore this version? It will replace the current document." Buttons: Cancel, Restore.
 - Calls `POST /pages/:pageId/snapshots/:snapshotId/restore`. While pending, the button shows a spinner and the dialog stays open.
 - On success: close preview, toast "Version restored", refetch snapshots, and **reload the Yjs provider** (destroy and recreate the `Y.Doc` and `WebsocketProvider`, since the server replaced the document state). All collaborators must receive the restore: handle the server closing the room/connection with a "restored" signal by recreating the provider and showing a toast "This page was restored to an earlier version."
 - Errors show a toast with a Retry option.

@@ -99,7 +99,7 @@ Stores historical document states.
 ### Important Database Notes
 - Store Yjs updates as binary data, not plain text.
 - Persist document updates incrementally instead of rewriting the entire document on every keystroke.
-- Create snapshots periodically and before major restoration operations.
+- Create snapshots periodically. Restoring a snapshot replaces the current document state.
 - Use database transactions when restoring document versions.
 - Index workspace_id, page_id, user_id, and created_at for frequently queried records.
 - Deduplicate or compact Yjs updates periodically to control storage growth.

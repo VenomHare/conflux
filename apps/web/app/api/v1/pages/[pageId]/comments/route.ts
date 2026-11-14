@@ -12,20 +12,43 @@ export async function POST(request: Request, context: RouteContext) {
     access = await getAccessiblePage(request, pageId);
   } catch (error) {
     console.error("Comment page access check failed", error);
-    return apiError("service_unavailable", "Comments are temporarily unavailable", 503);
+    return apiError(
+      "service_unavailable",
+      "Comments are temporarily unavailable",
+      503,
+    );
   }
   if ("error" in access) return access.error;
-  if (!canComment(access.membership.role)) return apiError("forbidden", "You cannot comment on this page", 403);
+  if (!canComment(access.membership.role))
+    return apiError("forbidden", "You cannot comment on this page", 403);
 
   const input = await readJson(request);
-  if (input === null) return apiError("invalid_request", "Send a valid JSON request under 16 KB", 400);
+  if (input === null)
+    return apiError(
+      "invalid_request",
+      "Send a valid JSON request under 16 KB",
+      400,
+    );
   const parsed = createCommentSchema.safeParse(input);
-  if (!parsed.success) return apiError("validation_error", parsed.error.issues[0]?.message ?? "Invalid comment", 400);
+  if (!parsed.success)
+    return apiError(
+      "validation_error",
+      parsed.error.issues[0]?.message ?? "Invalid comment",
+      400,
+    );
 
   try {
     if (parsed.data.parent_id) {
-      const parent = await access.db.orm.public.Comment.where({ id: parsed.data.parent_id, page_id: pageId }).first();
-      if (!parent) return apiError("validation_error", "Parent comment must belong to this page", 400);
+      const parent = await access.db.orm.public.Comment.where({
+        id: parsed.data.parent_id,
+        page_id: pageId,
+      }).first();
+      if (!parent)
+        return apiError(
+          "validation_error",
+          "Parent comment must belong to this page",
+          400,
+        );
     }
     const comment = await access.db.orm.public.Comment.create({
       page_id: pageId,
@@ -37,7 +60,11 @@ export async function POST(request: Request, context: RouteContext) {
     return apiResponse({ comment }, 201);
   } catch (error) {
     console.error("Comment creation failed", error);
-    return apiError("service_unavailable", "Comment creation is temporarily unavailable", 503);
+    return apiError(
+      "service_unavailable",
+      "Comment creation is temporarily unavailable",
+      503,
+    );
   }
 }
 
@@ -48,14 +75,40 @@ export async function GET(request: Request, context: RouteContext) {
     access = await getAccessiblePage(request, pageId);
   } catch (error) {
     console.error("Comment page access check failed", error);
-    return apiError("service_unavailable", "Comments are temporarily unavailable", 503);
+    return apiError(
+      "service_unavailable",
+      "Comments are temporarily unavailable",
+      503,
+    );
   }
   if ("error" in access) return access.error;
   try {
-    const comments = await access.db.orm.public.Comment.where({ page_id: pageId }).all();
-    return apiResponse({ comments });
+    const comments = await access.db.orm.public.Comment.where({
+      page_id: pageId,
+    }).all();
+    const authors = await access.db.orm.public.User.all();
+    const users = new Map(authors.map((author) => [author.id, author]));
+    return apiResponse({
+      comments: comments.map((comment) => {
+        const author = users.get(comment.author_id);
+        return {
+          ...comment,
+          author: author
+            ? {
+                id: author.id,
+                name: author.name,
+                avatar_url: author.avatar_url,
+              }
+            : null,
+        };
+      }),
+    });
   } catch (error) {
     console.error("Comment list failed", error);
-    return apiError("service_unavailable", "Comments are temporarily unavailable", 503);
+    return apiError(
+      "service_unavailable",
+      "Comments are temporarily unavailable",
+      503,
+    );
   }
 }

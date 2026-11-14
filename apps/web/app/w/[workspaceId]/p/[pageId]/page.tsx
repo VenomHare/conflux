@@ -1,2 +1,5 @@
-import { PageDetail } from "@/components/workspace-app";
-export default function DocumentPage() { return <PageDetail />; }
+import { PageDetail } from "@/components/page-detail";
+
+export default function DocumentPage() {
+  return <PageDetail />;
+}

@@ -1,2 +1,5 @@
-import { WorkspaceHome } from "@/components/workspace-app";
-export default function WorkspacePage() { return <WorkspaceHome />; }
+import { WorkspaceHome } from "@/components/workspace-home";
+
+export default function WorkspacePage() {
+  return <WorkspaceHome />;
+}

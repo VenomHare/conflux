@@ -1,5 +1,10 @@
+import * as Y from "yjs";
 import { apiError, apiResponse, readJson } from "@/lib/api";
-import { getPageHistoryAccess, combinePageUpdates, snapshotMetadata } from "@/lib/version-history";
+import {
+  getPageHistoryAccess,
+  combinePageUpdates,
+  snapshotMetadata,
+} from "@/lib/version-history";
 import { createSnapshotSchema } from "@/lib/schemas/snapshot";
 
 export const runtime = "nodejs";
@@ -12,17 +17,41 @@ export async function POST(request: Request, context: RouteContext) {
     access = await getPageHistoryAccess(request, pageId, true);
   } catch (error) {
     console.error("Snapshot access check failed", error);
-    return apiError("service_unavailable", "Version history is temporarily unavailable", 503);
+    return apiError(
+      "service_unavailable",
+      "Version history is temporarily unavailable",
+      503,
+    );
   }
   if ("error" in access) return access.error;
 
-  const input = await readJson(request);
-  if (input === null) return apiError("invalid_request", "Send a valid JSON request under 16 KB", 400);
+  const input = await readJson(request, 3_000_000);
+  if (input === null)
+    return apiError(
+      "invalid_request",
+      "Send a valid JSON request under 3 MB",
+      400,
+    );
   const parsed = createSnapshotSchema.safeParse(input);
-  if (!parsed.success) return apiError("validation_error", parsed.error.issues[0]?.message ?? "Invalid snapshot", 400);
+  if (!parsed.success)
+    return apiError(
+      "validation_error",
+      parsed.error.issues[0]?.message ?? "Invalid snapshot",
+      400,
+    );
   try {
-    const updates = await access.db.orm.public.PageUpdate.where({ page_id: pageId }).all();
-    const state = combinePageUpdates(updates as unknown as { update: unknown }[]);
+    let state: Uint8Array;
+    if (parsed.data.document_state) {
+      const document = new Y.Doc();
+      const encodedState = Buffer.from(parsed.data.document_state, "base64");
+      Y.applyUpdate(document, encodedState);
+      state = Y.encodeStateAsUpdate(document);
+    } else {
+      const updates = await access.db.orm.public.PageUpdate.where({
+        page_id: pageId,
+      }).all();
+      state = combinePageUpdates(updates as unknown as { update: unknown }[]);
+    }
     const snapshot = await access.db.orm.public.PageSnapshot.create({
       page_id: pageId,
       created_by: access.user.id,
@@ -32,7 +61,11 @@ export async function POST(request: Request, context: RouteContext) {
     return apiResponse({ snapshot: snapshotMetadata(snapshot) }, 201);
   } catch (error) {
     console.error("Snapshot creation failed", error);
-    return apiError("service_unavailable", "Snapshot creation is temporarily unavailable", 503);
+    return apiError(
+      "service_unavailable",
+      "Snapshot creation is temporarily unavailable",
+      503,
+    );
   }
 }
 
@@ -41,10 +74,32 @@ export async function GET(request: Request, context: RouteContext) {
   try {
     const access = await getPageHistoryAccess(request, pageId);
     if ("error" in access) return access.error;
-    const snapshots = await access.db.orm.public.PageSnapshot.where({ page_id: pageId }).all();
-    return apiResponse({ snapshots: snapshots.map((snapshot) => snapshotMetadata(snapshot)) });
+    const snapshots = await access.db.orm.public.PageSnapshot.where({
+      page_id: pageId,
+    }).all();
+    const authors = await access.db.orm.public.User.all();
+    const users = new Map(authors.map((author) => [author.id, author]));
+    return apiResponse({
+      snapshots: snapshots.map((snapshot) => {
+        const author = users.get(snapshot.created_by);
+        return {
+          ...snapshotMetadata(snapshot),
+          author: author
+            ? {
+                id: author.id,
+                name: author.name,
+                avatar_url: author.avatar_url,
+              }
+            : null,
+        };
+      }),
+    });
   } catch (error) {
     console.error("Snapshot list failed", error);
-    return apiError("service_unavailable", "Version history is temporarily unavailable", 503);
+    return apiError(
+      "service_unavailable",
+      "Version history is temporarily unavailable",
+      503,
+    );
   }
 }

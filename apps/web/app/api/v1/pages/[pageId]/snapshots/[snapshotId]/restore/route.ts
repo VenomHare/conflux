@@ -1,6 +1,7 @@
 import * as Y from "yjs";
 import { apiError, apiResponse } from "@/lib/api";
-import { getPageHistoryAccess, combinePageUpdates, isBinaryState } from "@/lib/version-history";
+import { getPageHistoryAccess, isBinaryState } from "@/lib/version-history";
+import { clearPageDocumentCache } from "@/lib/redis";
 import { uuidSchema } from "@/lib/schemas/workspace";
 
 export const runtime = "nodejs";
@@ -10,42 +11,113 @@ export async function POST(
   context: { params: Promise<{ pageId: string; snapshotId: string }> },
 ) {
   const { pageId, snapshotId } = await context.params;
+  console.log(
+    `[restore] request page=${pageId} snapshot=${snapshotId} method=${request.method}`,
+  );
   try {
     const access = await getPageHistoryAccess(request, pageId, true);
-    if ("error" in access) return access.error;
-    if (!uuidSchema.safeParse(snapshotId).success) return apiError("validation_error", "Snapshot id must be a UUID", 400);
+    if ("error" in access) {
+      console.log(
+        `[restore] access denied page=${pageId} snapshot=${snapshotId}`,
+      );
+      return access.error;
+    }
+    if (!uuidSchema.safeParse(snapshotId).success) {
+      console.log(
+        `[restore] invalid snapshot id page=${pageId} snapshot=${snapshotId}`,
+      );
+      return apiError("validation_error", "Snapshot id must be a UUID", 400);
+    }
 
     const result = await access.db.transaction(async (tx) => {
-      const snapshot = await tx.orm.public.PageSnapshot.where({ id: snapshotId, page_id: pageId }).first();
-      if (!snapshot) return { error: "not_found" as const };
-      if (!isBinaryState(snapshot.document_state)) return { error: "invalid_snapshot" as const };
+      const snapshot = await tx.orm.public.PageSnapshot.where({
+        id: snapshotId,
+        page_id: pageId,
+      }).first();
+      if (!snapshot) {
+        console.log(
+          `[restore] snapshot not found page=${pageId} snapshot=${snapshotId}`,
+        );
+        return { error: "not_found" as const };
+      }
+      if (!isBinaryState(snapshot.document_state)) {
+        console.log(
+          `[restore] invalid snapshot state page=${pageId} snapshot=${snapshotId} type=${typeof snapshot.document_state}`,
+        );
+        return { error: "invalid_snapshot" as const };
+      }
+      console.log(
+        `[restore] snapshot selected page=${pageId} snapshot=${snapshotId} created=${snapshot.created_at} bytes=${snapshot.document_state.byteLength}`,
+      );
+
+      // Lock the page before reading/replacing updates. The collaboration
+      // writer takes this same lock, so no pre-restore update can land after
+      // the restored state is installed.
+      const previousPage = await tx.orm.public.Page.where({
+        id: pageId,
+        deleted_at: null,
+      }).first();
+      const previousTimestamp = previousPage
+        ? Date.parse(previousPage.updated_at as string)
+        : 0;
+      const restoreTimestamp = new Date(
+        Math.max(Date.now(), previousTimestamp + 1),
+      ).toISOString();
+      console.log(
+        `[restore] page locked page=${pageId} previousUpdatedAt=${previousPage?.updated_at ?? "none"} restoreUpdatedAt=${restoreTimestamp}`,
+      );
+      await tx.orm.public.Page.where({ id: pageId, deleted_at: null }).update({
+        updated_at: restoreTimestamp,
+      });
 
       const target = new Y.Doc();
-      Y.applyUpdate(target, snapshot.document_state);
-      const updates = await tx.orm.public.PageUpdate.where({ page_id: pageId }).all();
-      const currentState = combinePageUpdates(updates as unknown as { update: unknown }[]);
-      await tx.orm.public.PageSnapshot.create({
+      Y.applyUpdate(target, snapshot.document_state as Uint8Array);
+      const restoredUpdate = Y.encodeStateAsUpdate(target);
+      console.log(
+        `[restore] snapshot decoded page=${pageId} snapshot=${snapshotId} client=${target.clientID} stateVectorBytes=${Y.encodeStateVector(target).byteLength} updateBytes=${restoredUpdate.byteLength} paragraphs=${target.getXmlFragment("default").length}`,
+      );
+      target.destroy();
+      const existingUpdates = (await tx.orm.public.PageUpdate.where({
         page_id: pageId,
-        created_by: access.user.id,
-        document_state: currentState,
-        label: "Before restore",
-      });
-      const existingUpdates = await tx.orm.public.PageUpdate.where({ page_id: pageId }).all() as unknown as { id: string }[];
+      }).all()) as unknown as { id: string }[];
+      console.log(
+        `[restore] replacing database updates page=${pageId} snapshot=${snapshotId} oldCount=${existingUpdates.length}`,
+      );
       for (const update of existingUpdates) {
-        if (typeof update.id !== "string") throw new Error("Stored page update has no id");
+        if (typeof update.id !== "string")
+          throw new Error("Stored page update has no id");
         await tx.orm.public.PageUpdate.where({ id: update.id }).delete();
       }
-      const restoredUpdate = Y.encodeStateAsUpdate(target);
-      await tx.orm.public.PageUpdate.create({ page_id: pageId, update: restoredUpdate });
+      await tx.orm.public.PageUpdate.create({
+        page_id: pageId,
+        update: restoredUpdate,
+      });
+      console.log(
+        `[restore] database update saved page=${pageId} snapshot=${snapshotId} bytes=${restoredUpdate.byteLength}`,
+      );
       return { ok: true as const };
     });
     if ("error" in result) {
-      if (result.error === "not_found") return apiError("not_found", "Snapshot not found", 404);
+      if (result.error === "not_found")
+        return apiError("not_found", "Snapshot not found", 404);
       return apiError("service_unavailable", "Snapshot data is invalid", 503);
     }
+    const cacheCleared = await clearPageDocumentCache(pageId);
+    console.log(
+      `[restore] Redis cache ${cacheCleared ? "cleared" : "clear failed; cache will be rejected by updatedAt"} page=${pageId}`,
+    );
+    console.log(
+      `[restore] complete page=${pageId} snapshot=${snapshotId} restored=${result.ok}`,
+    );
     return apiResponse({ restored: result.ok });
   } catch (error) {
-    console.error("Snapshot restore failed", error);
-    return apiError("service_unavailable", "Snapshot restore is temporarily unavailable", 503);
+    console.error(
+      `[restore] failed page=${pageId} snapshot=${snapshotId}: ${String(error)}`,
+    );
+    return apiError(
+      "service_unavailable",
+      "Snapshot restore is temporarily unavailable",
+      503,
+    );
   }
 }

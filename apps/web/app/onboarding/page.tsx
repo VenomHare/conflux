@@ -1,2 +1,5 @@
-import { Onboarding } from "@/components/workspace-app";
-export default function OnboardingPage() { return <Onboarding />; }
+import { Onboarding } from "@/components/onboarding";
+
+export default function OnboardingPage() {
+  return <Onboarding />;
+}
