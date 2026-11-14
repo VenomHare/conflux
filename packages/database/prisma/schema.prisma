@@ -87,6 +87,7 @@ model Page {
   workspace_id Uuid
   title        String
   content      String           @default("")
+  auto_snapshots_enabled Boolean @default(false)
   created_by   Uuid
   created_at   TimestamptzString @default(now())
   updated_at   TimestamptzString @default(now())

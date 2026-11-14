@@ -14,6 +14,8 @@ const PAGE_ID_PATTERN =
 const AUTH_SECRET = process.env.AUTH_SECRET;
 const MAX_MESSAGE_BYTES = 1024 * 1024;
 const ACCESS_RECHECK_MS = 15_000;
+const AUTO_SNAPSHOT_INTERVAL_MS = 30 * 1000;
+const AUTO_SNAPSHOT_RETENTION = 20;
 
 if (
   !AUTH_SECRET ||
@@ -33,23 +35,21 @@ function toBytes(data: RawData): Uint8Array {
 
 function sanitizeAwarenessUpdate(
   update: Uint8Array,
-  identity: { userId: string; name: string; avatarUrl: string | null },
+  identity: { userId: string; name: string; avatarUrl: string | null; color: string },
   ownedClients: Set<number>,
 ) {
   const decoder = decoding.createDecoder(update);
   const encoder = encoding.createEncoder();
   const count = decoding.readVarUint(decoder);
   if (count > 64) throw new Error("Too many awareness states");
-  encoding.writeVarUint(encoder, count);
+  const entries: { clientId: number; clock: number; state: string }[] = [];
   for (let index = 0; index < count; index += 1) {
     const clientId = decoding.readVarUint(decoder);
     const clock = decoding.readVarUint(decoder);
     const state: unknown = JSON.parse(decoding.readVarString(decoder));
     if (state === null) {
       if (!ownedClients.has(clientId)) continue;
-      encoding.writeVarUint(encoder, clientId);
-      encoding.writeVarUint(encoder, clock);
-      encoding.writeVarString(encoder, "null");
+      entries.push({ clientId, clock, state: "null" });
       continue;
     }
     if (!state || typeof state !== "object" || Array.isArray(state)) continue;
@@ -65,9 +65,13 @@ function sanitizeAwarenessUpdate(
       clean.cursor = cursor;
     }
     ownedClients.add(clientId);
-    encoding.writeVarUint(encoder, clientId);
-    encoding.writeVarUint(encoder, clock);
-    encoding.writeVarString(encoder, JSON.stringify(clean));
+    entries.push({ clientId, clock, state: JSON.stringify(clean) });
+  }
+  encoding.writeVarUint(encoder, entries.length);
+  for (const entry of entries) {
+    encoding.writeVarUint(encoder, entry.clientId);
+    encoding.writeVarUint(encoder, entry.clock);
+    encoding.writeVarString(encoder, entry.state);
   }
   return encoding.toUint8Array(encoder);
 }
@@ -135,12 +139,32 @@ type Room = {
   clients: Set<WebSocket>;
   canEdit: Map<WebSocket, boolean>;
   awarenessClients: Map<WebSocket, Set<number>>;
+  users: Map<WebSocket, string>;
+  userColors: Map<string, string>;
   refreshTimer: ReturnType<typeof setInterval> | null;
   persistQueue: Promise<void>;
   stale: boolean;
 };
 
+function getUserColor(room: Room, userId: string) {
+  const assigned = room.userColors.get(userId);
+  if (assigned) return assigned;
+  const used = new Set(room.userColors.values());
+  for (let slot = 0; slot < 360; slot += 1) {
+    const hue = Math.round((slot * 137.508) % 360);
+    const candidate = `hsl(${hue} 76% 40%)`;
+    if (!used.has(candidate)) {
+      room.userColors.set(userId, candidate);
+      return candidate;
+    }
+  }
+  const fallback = `hsl(${(room.userColors.size * 53) % 360} 76% 40%)`;
+  room.userColors.set(userId, fallback);
+  return fallback;
+}
+
 const rooms = new Map<string, Promise<Room | null>>();
+let snapshotJobRunning = false;
 const ws = new WebSocketServer({
   port: Number(process.env.PORT ?? 8008),
   maxPayload: MAX_MESSAGE_BYTES,
@@ -293,11 +317,22 @@ async function loadRoom(pageId: string): Promise<Room | null> {
     clients: new Set(),
     canEdit: new Map(),
     awarenessClients: new Map(),
+    users: new Map(),
+    userColors: new Map(),
     refreshTimer: null,
     persistQueue: Promise.resolve(),
     stale: false,
   };
-  room.awareness.on("update", ({ added, updated, removed }, origin) => {
+  room.awareness.on(
+    "update",
+    (
+      { added, updated, removed }: {
+        added: number[];
+        updated: number[];
+        removed: number[];
+      },
+      origin: unknown,
+    ) => {
     const changed = [...added, ...updated, ...removed];
     if (changed.length === 0) return;
     const encoder = encoding.createEncoder();
@@ -314,65 +349,12 @@ async function loadRoom(pageId: string): Promise<Room | null> {
         message.byteLength <= MAX_MESSAGE_BYTES
       ) client.send(message);
     }
-  });
+    },
+  );
   Y.applyUpdate(room.persistedDoc, Y.encodeStateAsUpdate(doc));
   console.log(
     `[restore] room loaded page=${pageId} updatedAt=${room.updatedAt} stateVectorBytes=${Y.encodeStateVector(doc).byteLength} paragraphs=${doc.getXmlFragment("default").length}`,
   );
-
-  doc.on("update", (update, origin) => {
-    const canWrite =
-      !room.stale &&
-      origin instanceof WebSocket &&
-      room.canEdit.get(origin) === true;
-    if (!canWrite) return;
-
-    room.persistQueue = room.persistQueue
-      .then(async () => {
-        if (room.stale) return;
-        const currentDb = await getDb();
-        let restored = false;
-        let persistedAt = room.updatedAt;
-        await currentDb.transaction(async (tx) => {
-          // Take the same page-row lock as restore before persisting.
-          // This orders writes on either side of the restore boundary.
-          const updatedAt = new Date().toISOString();
-          const page = await tx.orm
-            .public!.Page!.where({ id: pageId, deleted_at: null })
-            .update({ updated_at: updatedAt });
-          const updates = (await tx.orm
-            .public!.PageUpdate!.where({ page_id: pageId })
-            .all()) as unknown as { update: unknown }[];
-          if (!matchesPersistedDocument(room.persistedDoc, updates)) {
-            console.log(
-              `[restore] stale room write rejected page=${pageId} bytes=${update.byteLength} roomUpdatedAt=${room.updatedAt} databaseUpdateCount=${updates.length}`,
-            );
-            restored = true;
-            return;
-          }
-          await tx.orm.public!.PageUpdate!.create({
-            page_id: pageId,
-            update: Buffer.from(update),
-          });
-          persistedAt = (page?.updated_at as string | undefined) ?? updatedAt;
-        });
-        if (restored) await evictStaleRoom(pageId, room);
-        else {
-          Y.applyUpdate(room.persistedDoc, Buffer.from(update));
-          room.updatedAt = persistedAt;
-          await cacheDocument(pageId, room.updatedAt, room.persistedDoc);
-        }
-      })
-      .catch((error: unknown) => {
-        console.error(
-          `[restore] Yjs persistence failed page=${pageId}: ${String(error)}`,
-        );
-        for (const client of room.clients) {
-          if (client.readyState === WebSocket.OPEN)
-            client.close(1011, "Document persistence failed");
-        }
-      });
-  });
 
   // A restore replaces persisted updates outside this process. Compare the
   // database state with our last persisted Y.Doc so title-only timestamp
@@ -411,6 +393,176 @@ async function loadRoom(pageId: string): Promise<Room | null> {
   return room;
 }
 
+async function persistRoomChanges(pageId: string, room: Room) {
+  const operation = room.persistQueue.then(async () => {
+    if (room.stale) throw new Error("Room is stale");
+    const pendingUpdate = Y.encodeStateAsUpdate(
+      room.doc,
+      Y.encodeStateVector(room.persistedDoc),
+    );
+    if (pendingUpdate.byteLength <= 2) return;
+    console.log(
+      `[persistence] update queued page=${pageId} bytes=${pendingUpdate.byteLength}`,
+    );
+
+    const db = await getDb();
+    let staleRoom = false;
+    let persistedAt = room.updatedAt;
+    try {
+      await db.transaction(async (tx) => {
+        const updatedAt = new Date().toISOString();
+        const page = await tx.orm.public!.Page!
+          .where({ id: pageId, deleted_at: null })
+          .update({ updated_at: updatedAt });
+        const updates = (await tx.orm.public!.PageUpdate!
+          .where({ page_id: pageId })
+          .all()) as unknown as { update: unknown }[];
+        if (!matchesPersistedDocument(room.persistedDoc, updates)) {
+          staleRoom = true;
+          throw new Error("Document state changed outside this room");
+        }
+        if (!page) throw new Error("Page was deleted before persistence");
+        await tx.orm.public!.PageUpdate!.create({
+          page_id: pageId,
+          update: Buffer.from(pendingUpdate),
+        });
+        persistedAt = (page.updated_at as string | undefined) ?? updatedAt;
+      });
+    } catch (error) {
+      if (staleRoom) {
+        await evictStaleRoom(pageId, room);
+        throw new Error("Document was restored; reconnect to the current version");
+      }
+      throw error;
+    }
+    Y.applyUpdate(room.persistedDoc, pendingUpdate);
+    room.updatedAt = persistedAt;
+    await cacheDocument(pageId, room.updatedAt, room.persistedDoc);
+    console.log(
+      `[persistence] update committed page=${pageId} bytes=${pendingUpdate.byteLength} updatedAt=${persistedAt}`,
+    );
+  });
+  room.persistQueue = operation.catch((error: unknown) => {
+    console.error(
+      `[persistence] update failed page=${pageId}: ${error instanceof Error ? error.message : "unknown error"}`,
+      );
+    for (const client of room.clients) {
+      if (client.readyState === WebSocket.OPEN)
+        client.close(1011, "Document persistence failed");
+    }
+  });
+  await operation;
+}
+
+async function createAutomaticSnapshots() {
+  const startedAt = Date.now();
+  console.log(`[snapshots] scheduler tick intervalMs=${AUTO_SNAPSHOT_INTERVAL_MS}`);
+  if (snapshotJobRunning) {
+    console.log("[snapshots] previous run still active; this tick skipped");
+    return;
+  }
+  snapshotJobRunning = true;
+  try {
+    const db = await getDb();
+    const pages = await db.orm.public!.Page!
+      .where({ auto_snapshots_enabled: true, deleted_at: null })
+      .all();
+    console.log(`[snapshots] enabled pages found count=${pages.length}`);
+    for (const page of pages) {
+      if (
+        typeof page.id !== "string" ||
+        typeof page.created_by !== "string" ||
+        typeof page.updated_at !== "string"
+      ) {
+        console.warn("[snapshots] enabled page skipped: incomplete page metadata");
+        continue;
+      }
+      const outcome = await db.transaction(async (tx) => {
+          const current = await tx.orm.public!.Page!
+            .where({ id: page.id, deleted_at: null })
+            .first();
+          if (!current || typeof current.updated_at !== "string")
+            return { kind: "page_missing" as const };
+          const revisionLabel = `auto:${current.updated_at}`;
+          const existing = await tx.orm.public!.PageSnapshot!
+            .where({ page_id: page.id, label: revisionLabel })
+            .first();
+          if (existing) return { kind: "unchanged" as const };
+          const updates = (await tx.orm.public!.PageUpdate!
+            .where({ page_id: page.id })
+            .all()) as unknown as { update: unknown }[];
+          if (updates.length === 0) return { kind: "no_persisted_updates" as const };
+          const document = new Y.Doc();
+          let state: Uint8Array;
+          try {
+            for (const update of updates) {
+              if (!(update.update instanceof Uint8Array))
+                throw new Error("Stored page update is not binary");
+              Y.applyUpdate(document, update.update);
+            }
+            state = Y.encodeStateAsUpdate(document);
+          } finally {
+            document.destroy();
+          }
+          await tx.orm.public!.PageSnapshot!.create({
+            page_id: page.id,
+            created_by: page.created_by,
+            document_state: state,
+            label: revisionLabel,
+          });
+          const automatic = (await tx.orm.public!.PageSnapshot!
+            .where({ page_id: page.id })
+            .all())
+            .filter((snapshot) =>
+              typeof snapshot.label === "string" &&
+              snapshot.label.startsWith("auto:"),
+            )
+            .sort((left, right) =>
+              Date.parse(right.created_at as string) -
+              Date.parse(left.created_at as string),
+            );
+          for (const oldSnapshot of automatic.slice(AUTO_SNAPSHOT_RETENTION)) {
+            if (typeof oldSnapshot.id === "string")
+              await tx.orm.public!.PageSnapshot!
+                .where({ id: oldSnapshot.id })
+                .delete();
+          }
+          return {
+            kind: "created" as const,
+            revision: current.updated_at,
+            bytes: state.byteLength,
+            retained: Math.min(automatic.length + 1, AUTO_SNAPSHOT_RETENTION),
+          };
+      });
+      if (outcome.kind === "created") {
+        console.log(
+          `[snapshots] snapshot created page=${page.id} revision=${outcome.revision} bytes=${outcome.bytes} retained=${outcome.retained}`,
+        );
+      } else {
+        console.log(`[snapshots] page skipped page=${page.id} reason=${outcome.kind}`);
+      }
+    }
+    console.log(
+      `[snapshots] scheduler complete pages=${pages.length} durationMs=${Date.now() - startedAt}`,
+    );
+  } catch (error) {
+    console.error(
+      `[snapshots] automatic snapshot job failed: ${error instanceof Error ? error.message : "unknown error"}`,
+    );
+  } finally {
+    snapshotJobRunning = false;
+  }
+}
+
+const automaticSnapshotTimer = setInterval(
+  () => void createAutomaticSnapshots(),
+  AUTO_SNAPSHOT_INTERVAL_MS,
+);
+automaticSnapshotTimer.unref();
+console.log(
+  `[snapshots] scheduler started intervalMs=${AUTO_SNAPSHOT_INTERVAL_MS} retention=${AUTO_SNAPSHOT_RETENTION}`,
+);
+
 ws.on("connection", async (socket, request) => {
   const url = new URL(request.url ?? "/", "http://localhost");
   const pageId = decodeURIComponent(url.pathname.slice(1));
@@ -442,12 +594,6 @@ ws.on("connection", async (socket, request) => {
     socket.close(1008, "User no longer exists");
     return;
   }
-  const identity = {
-    userId,
-    name: String(user.name),
-    avatarUrl: typeof user.avatar_url === "string" ? user.avatar_url : null,
-  };
-
   let roomPromise = rooms.get(pageId);
   if (!roomPromise) {
     roomPromise = loadRoom(pageId).catch((error: unknown) => {
@@ -464,6 +610,12 @@ ws.on("connection", async (socket, request) => {
     socket.close(1011, "Could not load page document");
     return;
   }
+  const identity = {
+    userId,
+    name: String(user.name),
+    avatarUrl: typeof user.avatar_url === "string" ? user.avatar_url : null,
+    color: getUserColor(room, userId),
+  };
 
   const currentPage = await access.db.orm
     .public!.Page!.where({ id: pageId, deleted_at: null })
@@ -485,6 +637,7 @@ ws.on("connection", async (socket, request) => {
   room.updatedAt = currentPage.updated_at as string;
 
   room.clients.add(socket);
+  room.users.set(socket, userId);
   room.canEdit.set(socket, access.canEdit);
   const ownedAwarenessClients = new Set<number>();
   room.awarenessClients.set(socket, ownedAwarenessClients);
@@ -561,6 +714,16 @@ ws.on("connection", async (socket, request) => {
       encoding.writeVarUint(encoder, 0);
       decoding.readVarUint(messageDecoder);
       syncProtocol.readSyncMessage(messageDecoder, encoder, room.doc, socket);
+      // Persist the exact delta missing from PostgreSQL before confirming the
+      // message to peers. This is scoped to authenticated editable sync frames.
+      if (canEdit && (syncMessageType === 1 || syncMessageType === 2)) {
+        try {
+          await persistRoomChanges(pageId, room);
+        } catch {
+          return;
+        }
+      }
+      if (socket.readyState !== WebSocket.OPEN || room.stale) return;
       if (syncMessageType !== 0) {
         const updateEncoder = encoding.createEncoder();
         encoding.writeVarUint(updateEncoder, 0);
@@ -577,7 +740,6 @@ ws.on("connection", async (socket, request) => {
           `[restore] live update broadcast page=${pageId} user=${userId} type=${syncMessageType} bytes=${updateMessage.byteLength} peers=${peers}`,
         );
       }
-      await room.persistQueue;
       if (socket.readyState !== WebSocket.OPEN) return;
       const response = encoding.toUint8Array(encoder);
       console.log(
@@ -603,6 +765,8 @@ ws.on("connection", async (socket, request) => {
     room.awarenessClients.delete(socket);
     room.clients.delete(socket);
     room.canEdit.delete(socket);
+    room.users.delete(socket);
+    if (![...room.users.values()].includes(userId)) room.userColors.delete(userId);
   });
   socket.on("error", (error) =>
     console.error(`[restore] websocket error page=${pageId}: ${String(error)}`),

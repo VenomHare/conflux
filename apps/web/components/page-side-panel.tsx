@@ -77,6 +77,13 @@ export function PageSidePanel({
     (kind === "comments" ? loadComments() : loadSnapshots()).catch((e) =>
       setError(e instanceof Error ? e.message : "Could not load panel"),
     );
+    if (kind !== "history") return;
+    const refreshTimer = setInterval(() => {
+      void loadSnapshots().catch((e) =>
+        setError(e instanceof Error ? e.message : "Could not refresh history"),
+      );
+    }, 30_000);
+    return () => clearInterval(refreshTimer);
   }, [kind, pageId]);
   async function mutate(path: string, method: string, body?: unknown) {
     setBusy(true);

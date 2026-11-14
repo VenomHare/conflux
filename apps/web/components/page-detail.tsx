@@ -24,14 +24,7 @@ type AwarenessRef = {
 
 const remotePresenceKey = new PluginKey("remotePresence");
 
-function presenceColor(userId: string) {
-  const palette = ["#b74c3c", "#397a68", "#6b61a8", "#b17b24", "#36749a"];
-  let hash = 0;
-  for (const character of userId) hash = (hash * 31 + character.charCodeAt(0)) | 0;
-  return palette[Math.abs(hash) % palette.length]!;
-}
-
-function remotePresenceExtension(awarenessRef: AwarenessRef) {
+function remotePresenceExtension(awarenessRef: AwarenessRef, localUserId: string) {
   return Extension.create({
     name: "remotePresence",
     addProseMirrorPlugins() {
@@ -43,13 +36,14 @@ function remotePresenceExtension(awarenessRef: AwarenessRef) {
               const decorations: Decoration[] = [];
               for (const remote of awarenessRef.current?.getStates().values() ?? []) {
                 const person = remote.user as
-                  | { userId?: string; name?: string }
+                  | { userId?: string; name?: string; color?: string }
                   | undefined;
                 const cursor = remote.cursor as
                   | { anchor?: number; head?: number }
                   | undefined;
                 if (
                   !person?.userId ||
+                  person.userId === localUserId ||
                   !person.name ||
                   !cursor ||
                   !Number.isInteger(cursor?.anchor) ||
@@ -63,7 +57,7 @@ function remotePresenceExtension(awarenessRef: AwarenessRef) {
                   anchor > state.doc.content.size ||
                   head > state.doc.content.size
                 ) continue;
-                const color = presenceColor(person.userId);
+                const color = person.color ?? "#397a68";
                 if (anchor !== head) {
                   decorations.push(
                     Decoration.inline(Math.min(anchor, head), Math.max(anchor, head), {
@@ -138,9 +132,9 @@ export function PageDetail() {
     () => [
       StarterKit.configure({ undoRedo: false }),
       Collaboration.configure({ document: ydoc }),
-      remotePresenceExtension(awarenessRef),
+      remotePresenceExtension(awarenessRef, user.id),
     ],
-    [ydoc],
+    [ydoc, user.id],
   );
   const editor = useEditor(
     {
@@ -214,6 +208,9 @@ export function PageDetail() {
           // holding the pre-restore Y.Doc must not merge it back locally.
           // The collaboration server already syncs all tabs over WebSocket.
           disableBc: true,
+          // Reconcile with the authoritative server state every second to
+          // recover from a missed update while the socket remains open.
+          resyncInterval: 1000,
           params: { token },
           shouldReconnect: (event) =>
             event.code !== 1008 && event.code !== 1003 && event.code !== 4401,

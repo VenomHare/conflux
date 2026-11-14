@@ -42,6 +42,7 @@ type Page = {
   title: string;
   created_at?: string;
   updated_at: string;
+  auto_snapshots_enabled?: boolean;
 };
 type User = {
   id: string;
@@ -260,6 +261,28 @@ export function Sidebar({
       );
     }
   }
+  async function toggleAutomaticSnapshots(page: Page) {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api<{ page: Page }>(
+        `/pages/${page.id}`,
+        send("PATCH", { auto_snapshots_enabled: !page.auto_snapshots_enabled }),
+      );
+      onPagesChange(
+        pages.map((item) => item.id === page.id ? result.page : item),
+      );
+      setMenuPage(null);
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Couldn't update automatic snapshots",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
   async function deletePage() {
     if (!confirmPage) return;
     setBusy(true);
@@ -412,6 +435,19 @@ export function Sidebar({
               >
                 <Link2 {...iconProps} /> Copy link
               </button>
+              {["OWNER", "ADMIN"].includes(workspace.myRole) && (
+                <button
+                  role="menuitemcheckbox"
+                  aria-checked={page.auto_snapshots_enabled ?? false}
+                  disabled={busy}
+                  onClick={() => void toggleAutomaticSnapshots(page)}
+                >
+                  <span aria-hidden="true">
+                    {page.auto_snapshots_enabled ? "☑" : "☐"}
+                  </span>
+                  Automatic snapshots
+                </button>
+              )}
               {editable && (
                 <>
                   <button role="menuitem" onClick={() => beginRename(page)}>

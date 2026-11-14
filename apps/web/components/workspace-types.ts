@@ -11,6 +11,7 @@ export type Page = {
   content: string;
   created_at?: string;
   updated_at: string;
+  auto_snapshots_enabled?: boolean;
 };
 
 export type PageSummary = Omit<Page, "content">;

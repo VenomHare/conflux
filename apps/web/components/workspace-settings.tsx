@@ -114,7 +114,10 @@ export function WorkspaceSettingsPage({
     try {
       const result = await api<{ workspace: typeof workspace }>(
         `/workspaces/${workspaceId}`,
-        send("PATCH", { name: name.trim(), description: description.trim() || null }),
+        send("PATCH", {
+          name: name.trim(),
+          description: description.trim() || null,
+        }),
       );
       setWorkspace({ ...result.workspace, myRole: workspace.myRole });
       setName(result.workspace.name);

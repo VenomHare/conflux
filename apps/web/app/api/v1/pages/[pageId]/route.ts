@@ -55,10 +55,20 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (input === null) return apiError("invalid_request", "Send a valid JSON request under 3 MB", 400);
   const parsed = updatePageSchema.safeParse(input);
   if (!parsed.success) return apiError("validation_error", parsed.error.issues[0]?.message ?? "Invalid page", 400);
+  if (
+    parsed.data.auto_snapshots_enabled !== undefined &&
+    access.membership.role !== "OWNER" &&
+    access.membership.role !== "ADMIN"
+  ) {
+    return apiError("forbidden", "Only workspace admins can change automatic snapshots", 403);
+  }
   try {
     const page = await access.db.orm.public.Page.where({ id: pageId, deleted_at: null }).update({
       title: parsed.data.title ?? access.page.title,
       content: parsed.data.content ?? access.page.content,
+      ...(parsed.data.auto_snapshots_enabled !== undefined
+        ? { auto_snapshots_enabled: parsed.data.auto_snapshots_enabled }
+        : {}),
       updated_at: new Date().toISOString(),
     });
     if (!page) return apiError("not_found", "Page not found", 404);

@@ -48,6 +48,8 @@ The example URL matches the local Compose credentials and database. Update `DATA
 
 For the low-cost deployment target, run one web app process and exactly one collaboration WebSocket process with a persistent PostgreSQL database. The collaboration service keeps active rooms in memory, so do not scale it to multiple replicas. Redis is optional and is only used as a cache; PostgreSQL remains the source of truth and the app should continue to work when Redis is not configured. Use a host that supports long-lived WebSocket connections and persistent processes rather than deploying the collaboration service as a serverless function.
 
+After updating the Prisma schema, apply the schema update before deploying the new application. For local development, run `bun db:push`. Automatic snapshots are disabled by default per page. A workspace Owner or Admin can enable them from that page's editor. The single collaboration process checks enabled pages every 15 minutes and keeps up to 20 automatic snapshots per page.
+
 Set `AUTH_SECRET` to a random value of at least 32 characters before using the authentication API. For example, run `openssl rand -base64 32` and replace the placeholder in your local environment file. Authentication responses return a bearer token; clients should send it as `Authorization: Bearer <token>` on protected routes. Tokens expire after 24 hours.
 
 For a browser client, store the returned token in local storage and attach it to protected requests:
