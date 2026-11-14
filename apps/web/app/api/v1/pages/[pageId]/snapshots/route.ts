@@ -43,9 +43,13 @@ export async function POST(request: Request, context: RouteContext) {
     let state: Uint8Array;
     if (parsed.data.document_state) {
       const document = new Y.Doc();
-      const encodedState = Buffer.from(parsed.data.document_state, "base64");
-      Y.applyUpdate(document, encodedState);
-      state = Y.encodeStateAsUpdate(document);
+      try {
+        const encodedState = Buffer.from(parsed.data.document_state, "base64");
+        Y.applyUpdate(document, encodedState);
+        state = Y.encodeStateAsUpdate(document);
+      } finally {
+        document.destroy();
+      }
     } else {
       const updates = await access.db.orm.public.PageUpdate.where({
         page_id: pageId,

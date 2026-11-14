@@ -10,10 +10,82 @@ import { EditorToolbar } from "@/components/editor-toolbar";
 import { canEdit } from "@/components/workspace-types";
 import type { Page } from "@/components/workspace-types";
 import { EditorContent, useEditor } from "@tiptap/react";
+import { Extension } from "@tiptap/react";
+import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { Collaboration } from "@tiptap/extension-collaboration";
 import { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
+
+type AwarenessRef = {
+  current: { getStates(): Map<number, Record<string, unknown>> } | null;
+};
+
+const remotePresenceKey = new PluginKey("remotePresence");
+
+function presenceColor(userId: string) {
+  const palette = ["#b74c3c", "#397a68", "#6b61a8", "#b17b24", "#36749a"];
+  let hash = 0;
+  for (const character of userId) hash = (hash * 31 + character.charCodeAt(0)) | 0;
+  return palette[Math.abs(hash) % palette.length]!;
+}
+
+function remotePresenceExtension(awarenessRef: AwarenessRef) {
+  return Extension.create({
+    name: "remotePresence",
+    addProseMirrorPlugins() {
+      return [
+        new Plugin({
+          key: remotePresenceKey,
+          props: {
+            decorations(state) {
+              const decorations: Decoration[] = [];
+              for (const remote of awarenessRef.current?.getStates().values() ?? []) {
+                const person = remote.user as
+                  | { userId?: string; name?: string }
+                  | undefined;
+                const cursor = remote.cursor as
+                  | { anchor?: number; head?: number }
+                  | undefined;
+                if (
+                  !person?.userId ||
+                  !person.name ||
+                  !cursor ||
+                  !Number.isInteger(cursor?.anchor) ||
+                  !Number.isInteger(cursor?.head)
+                ) continue;
+                const anchor = cursor.anchor!;
+                const head = cursor.head!;
+                if (
+                  anchor < 0 ||
+                  head < 0 ||
+                  anchor > state.doc.content.size ||
+                  head > state.doc.content.size
+                ) continue;
+                const color = presenceColor(person.userId);
+                if (anchor !== head) {
+                  decorations.push(
+                    Decoration.inline(Math.min(anchor, head), Math.max(anchor, head), {
+                      class: "remote-cursor-selection",
+                      style: `background-color: ${color}30; --remote-cursor-color: ${color}`,
+                    }),
+                  );
+                }
+                const caret = document.createElement("span");
+                caret.className = "remote-cursor-caret";
+                caret.style.setProperty("--remote-cursor-color", color);
+                caret.dataset.label = person.name;
+                decorations.push(Decoration.widget(head, caret, { key: person.userId }));
+              }
+              return DecorationSet.create(state.doc, decorations);
+            },
+          },
+        }),
+      ];
+    },
+  });
+}
 
 export function PageDetail() {
   const params = useParams<{ workspaceId: string; pageId: string }>();
@@ -25,10 +97,14 @@ export function PageDetail() {
   const [status, setStatus] = useState("Connecting…");
   const [titleStatus, setTitleStatus] = useState("");
   const [editorReady, setEditorReady] = useState(false);
+  const [collaborators, setCollaborators] = useState<
+    { userId: string; name: string; avatarUrl: string | null }[]
+  >([]);
   const [error, setError] = useState("");
   const [panel, setPanel] = useState<"comments" | "history" | null>(null);
   const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedTitle = useRef("");
+  const awarenessRef = useRef<AwarenessRef["current"]>(null);
   const ydoc = useMemo(() => new Y.Doc(), [pageId]);
   const connectionDoc = useMemo(
     () => (canEdit(workspace.myRole) ? ydoc : new Y.Doc()),
@@ -62,6 +138,7 @@ export function PageDetail() {
     () => [
       StarterKit.configure({ undoRedo: false }),
       Collaboration.configure({ document: ydoc }),
+      remotePresenceExtension(awarenessRef),
     ],
     [ydoc],
   );
@@ -86,6 +163,7 @@ export function PageDetail() {
     let bridgeRemoteUpdates:
       | ((update: Uint8Array, origin: unknown) => void)
       | null = null;
+    let selectionListener: (() => void) | null = null;
     let clearedLegacyContent = false;
     setStatus("Connecting…");
 
@@ -140,6 +218,44 @@ export function PageDetail() {
           shouldReconnect: (event) =>
             event.code !== 1008 && event.code !== 1003 && event.code !== 4401,
         });
+        awarenessRef.current = provider.awareness;
+        provider.awareness.setLocalStateField("user", {
+          userId: user.id,
+          name: user.name,
+          avatarUrl: user.avatar_url ?? null,
+        });
+        const updateCollaborators = () => {
+          const unique = new Map<string, { userId: string; name: string; avatarUrl: string | null }>();
+          for (const state of provider?.awareness.getStates().values() ?? []) {
+            const person = state.user as
+              | { userId?: unknown; name?: unknown; avatarUrl?: unknown }
+              | undefined;
+            if (
+              typeof person?.userId === "string" &&
+              typeof person.name === "string"
+            ) {
+              unique.set(person.userId, {
+                userId: person.userId,
+                name: person.name,
+                avatarUrl:
+                  typeof person.avatarUrl === "string" ? person.avatarUrl : null,
+              });
+            }
+          }
+          setCollaborators([...unique.values()]);
+          if (editor)
+            editor.view.dispatch(editor.state.tr.setMeta(remotePresenceKey, true));
+        };
+        provider.awareness.on("change", updateCollaborators);
+        updateCollaborators();
+        selectionListener = () => {
+          if (!editor || !provider) return;
+          provider.awareness.setLocalStateField("cursor", {
+            anchor: editor.state.selection.anchor,
+            head: editor.state.selection.head,
+          });
+        };
+        editor.on("selectionUpdate", selectionListener);
         bridgeRemoteUpdates = (update: Uint8Array, origin: unknown) => {
           if (canEditPage || origin !== provider || disposed) return;
           const fragment = ydoc.getXmlFragment("default");
@@ -167,9 +283,6 @@ export function PageDetail() {
           );
         });
         provider.on("sync", (synced) => {
-          console.log(
-            `[restore] browser sync page=${pageId} synced=${synced} stateVectorBytes=${Y.encodeStateVector(ydoc).byteLength} paragraphs=${ydoc.getXmlFragment("default").length} editorHtml=${editor.getHTML().slice(0, 120)}`,
-          );
           if (disposed || !synced) return;
           setStatus(canEditPage ? "Connected" : "View only");
         });
@@ -202,6 +315,9 @@ export function PageDetail() {
       clearInterval(tokenRefreshTimer);
       if (!canEditPage && bridgeRemoteUpdates)
         connectionDoc.off("update", bridgeRemoteUpdates);
+      if (selectionListener)
+        editor.off("selectionUpdate", selectionListener);
+      awarenessRef.current = null;
       provider?.destroy();
     };
   }, [
@@ -212,6 +328,7 @@ export function PageDetail() {
     ydoc,
     workspace.myRole,
     hasCollaborativeUpdates,
+    user,
   ]);
 
   useEffect(
@@ -263,6 +380,32 @@ export function PageDetail() {
           </div>
         </div>
         <div className="top-actions">
+          <div className="collaborator-presence" aria-label="People on this page">
+            {collaborators.slice(0, 5).map((person) => (
+              <span
+                className="collaborator-avatar"
+                key={person.userId}
+                title={person.name}
+                style={
+                  person.avatarUrl
+                    ? { backgroundImage: `url("${person.avatarUrl.replace(/["\\()]/g, encodeURIComponent)}")` }
+                    : undefined
+                }
+              >
+                {person.avatarUrl
+                  ? null
+                  : person.name
+                      .split(/\s+/)
+                      .map((part) => part[0])
+                      .join("")
+                      .slice(0, 2)
+                      .toUpperCase()}
+              </span>
+            ))}
+            {collaborators.length > 5 && (
+              <span className="collaborator-count">+{collaborators.length - 5}</span>
+            )}
+          </div>
           <button
             className={`secondary${panel === "comments" ? " is-active" : ""}`}
             type="button"

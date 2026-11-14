@@ -1390,6 +1390,55 @@ button:active {
   font-size: 12px;
   white-space: nowrap;
 }
+.collaborator-presence {
+  display: flex;
+  align-items: center;
+  padding-left: 4px;
+}
+.collaborator-avatar,
+.collaborator-count {
+  width: 28px;
+  height: 28px;
+  margin-left: -5px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  background-color: var(--accent, #476b62);
+  background-position: center;
+  background-size: cover;
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+}
+.collaborator-count {
+  background: var(--bg-muted);
+  color: var(--text-muted);
+}
+.remote-cursor-selection {
+  border-radius: 2px;
+}
+.remote-cursor-caret {
+  position: relative;
+  display: inline-block;
+  width: 0;
+  height: 1.15em;
+  border-left: 2px solid var(--remote-cursor-color);
+  vertical-align: text-bottom;
+  pointer-events: none;
+}
+.remote-cursor-caret::after {
+  content: attr(data-label);
+  position: absolute;
+  top: -1.55em;
+  left: -2px;
+  padding: 2px 6px;
+  border-radius: 4px 4px 4px 0;
+  background: var(--remote-cursor-color);
+  color: white;
+  font: 600 10px/1.4 var(--font-sans);
+  white-space: nowrap;
+}
 .top-actions .is-active {
   background: var(--bg-muted);
   color: var(--text);

@@ -71,12 +71,13 @@ export async function POST(
       });
 
       const target = new Y.Doc();
-      Y.applyUpdate(target, snapshot.document_state as Uint8Array);
-      const restoredUpdate = Y.encodeStateAsUpdate(target);
-      console.log(
-        `[restore] snapshot decoded page=${pageId} snapshot=${snapshotId} client=${target.clientID} stateVectorBytes=${Y.encodeStateVector(target).byteLength} updateBytes=${restoredUpdate.byteLength} paragraphs=${target.getXmlFragment("default").length}`,
-      );
-      target.destroy();
+      let restoredUpdate: Uint8Array;
+      try {
+        Y.applyUpdate(target, snapshot.document_state as Uint8Array);
+        restoredUpdate = Y.encodeStateAsUpdate(target);
+      } finally {
+        target.destroy();
+      }
       const existingUpdates = (await tx.orm.public.PageUpdate.where({
         page_id: pageId,
       }).all()) as unknown as { id: string }[];

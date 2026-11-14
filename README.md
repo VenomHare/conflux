@@ -46,6 +46,8 @@ cp .env.example apps/web/.env
 
 The example URL matches the local Compose credentials and database. Update `DATABASE_URL` in both files if you changed them or use a hosted database. These credentials are for local development only.
 
+For the low-cost deployment target, run one web app process and exactly one collaboration WebSocket process with a persistent PostgreSQL database. The collaboration service keeps active rooms in memory, so do not scale it to multiple replicas. Redis is optional and is only used as a cache; PostgreSQL remains the source of truth and the app should continue to work when Redis is not configured. Use a host that supports long-lived WebSocket connections and persistent processes rather than deploying the collaboration service as a serverless function.
+
 Set `AUTH_SECRET` to a random value of at least 32 characters before using the authentication API. For example, run `openssl rand -base64 32` and replace the placeholder in your local environment file. Authentication responses return a bearer token; clients should send it as `Authorization: Bearer <token>` on protected routes. Tokens expire after 24 hours.
 
 For a browser client, store the returned token in local storage and attach it to protected requests:

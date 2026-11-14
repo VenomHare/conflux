@@ -3,6 +3,7 @@ import * as Y from "yjs";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
 import * as syncProtocol from "y-protocols/sync";
+import * as awarenessProtocol from "y-protocols/awareness";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import { getDb } from "@repo/database";
 
@@ -11,6 +12,8 @@ const EDIT_ROLES = new Set(["OWNER", "ADMIN", "EDITOR"]);
 const PAGE_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const AUTH_SECRET = process.env.AUTH_SECRET;
+const MAX_MESSAGE_BYTES = 1024 * 1024;
+const ACCESS_RECHECK_MS = 15_000;
 
 if (
   !AUTH_SECRET ||
@@ -26,6 +29,47 @@ function toBytes(data: RawData): Uint8Array {
   if (data instanceof ArrayBuffer) return new Uint8Array(data);
   if (Array.isArray(data)) return new Uint8Array(Buffer.concat(data));
   return new Uint8Array(data);
+}
+
+function sanitizeAwarenessUpdate(
+  update: Uint8Array,
+  identity: { userId: string; name: string; avatarUrl: string | null },
+  ownedClients: Set<number>,
+) {
+  const decoder = decoding.createDecoder(update);
+  const encoder = encoding.createEncoder();
+  const count = decoding.readVarUint(decoder);
+  if (count > 64) throw new Error("Too many awareness states");
+  encoding.writeVarUint(encoder, count);
+  for (let index = 0; index < count; index += 1) {
+    const clientId = decoding.readVarUint(decoder);
+    const clock = decoding.readVarUint(decoder);
+    const state: unknown = JSON.parse(decoding.readVarString(decoder));
+    if (state === null) {
+      if (!ownedClients.has(clientId)) continue;
+      encoding.writeVarUint(encoder, clientId);
+      encoding.writeVarUint(encoder, clock);
+      encoding.writeVarString(encoder, "null");
+      continue;
+    }
+    if (!state || typeof state !== "object" || Array.isArray(state)) continue;
+    const supplied = state as Record<string, unknown>;
+    const clean: Record<string, unknown> = { user: identity };
+    const cursor = supplied.cursor;
+    if (
+      cursor &&
+      typeof cursor === "object" &&
+      Number.isSafeInteger((cursor as Record<string, unknown>).anchor) &&
+      Number.isSafeInteger((cursor as Record<string, unknown>).head)
+    ) {
+      clean.cursor = cursor;
+    }
+    ownedClients.add(clientId);
+    encoding.writeVarUint(encoder, clientId);
+    encoding.writeVarUint(encoder, clock);
+    encoding.writeVarString(encoder, JSON.stringify(clean));
+  }
+  return encoding.toUint8Array(encoder);
 }
 
 function getUserId(token: string | null): string | null {
@@ -85,17 +129,23 @@ async function getPageAccess(pageId: string, userId: string) {
 
 type Room = {
   doc: Y.Doc;
+  awareness: awarenessProtocol.Awareness;
   persistedDoc: Y.Doc;
   updatedAt: string;
   clients: Set<WebSocket>;
   canEdit: Map<WebSocket, boolean>;
+  awarenessClients: Map<WebSocket, Set<number>>;
   refreshTimer: ReturnType<typeof setInterval> | null;
   persistQueue: Promise<void>;
   stale: boolean;
 };
 
 const rooms = new Map<string, Promise<Room | null>>();
-const ws = new WebSocketServer({ port: Number(process.env.PORT ?? 8008) });
+const ws = new WebSocketServer({
+  port: Number(process.env.PORT ?? 8008),
+  maxPayload: MAX_MESSAGE_BYTES,
+  perMessageDeflate: false,
+});
 const PAGE_DOCUMENT_CACHE_PREFIX = "conflux:ws:page:";
 const redis = process.env.REDIS_URL
   ? new Bun.RedisClient(process.env.REDIS_URL)
@@ -196,6 +246,7 @@ async function evictStaleRoom(pageId: string, room: Room) {
     `[restore] stale room evicted page=${pageId} clients=${room.clients.size} persistedVectorBytes=${Y.encodeStateVector(room.persistedDoc).byteLength} liveVectorBytes=${Y.encodeStateVector(room.doc).byteLength}`,
   );
   if (room.refreshTimer) clearInterval(room.refreshTimer);
+  room.awareness.destroy();
   rooms.delete(pageId);
   for (const client of room.clients) {
     if (client.readyState === WebSocket.OPEN)
@@ -236,14 +287,34 @@ async function loadRoom(pageId: string): Promise<Room | null> {
 
   const room: Room = {
     doc,
+    awareness: new awarenessProtocol.Awareness(doc),
     persistedDoc: new Y.Doc(),
     updatedAt: pageUpdatedAt,
     clients: new Set(),
     canEdit: new Map(),
+    awarenessClients: new Map(),
     refreshTimer: null,
     persistQueue: Promise.resolve(),
     stale: false,
   };
+  room.awareness.on("update", ({ added, updated, removed }, origin) => {
+    const changed = [...added, ...updated, ...removed];
+    if (changed.length === 0) return;
+    const encoder = encoding.createEncoder();
+    encoding.writeVarUint(encoder, 1);
+    encoding.writeVarUint8Array(
+      encoder,
+      awarenessProtocol.encodeAwarenessUpdate(room.awareness, changed),
+    );
+    const message = encoding.toUint8Array(encoder);
+    for (const client of room.clients) {
+      if (
+        client !== origin &&
+        client.readyState === WebSocket.OPEN &&
+        message.byteLength <= MAX_MESSAGE_BYTES
+      ) client.send(message);
+    }
+  });
   Y.applyUpdate(room.persistedDoc, Y.encodeStateAsUpdate(doc));
   console.log(
     `[restore] room loaded page=${pageId} updatedAt=${room.updatedAt} stateVectorBytes=${Y.encodeStateVector(doc).byteLength} paragraphs=${doc.getXmlFragment("default").length}`,
@@ -366,6 +437,16 @@ ws.on("connection", async (socket, request) => {
     socket.close(1008, "Page access denied");
     return;
   }
+  const user = await access.db.orm.public!.User!.where({ id: userId }).first();
+  if (!user) {
+    socket.close(1008, "User no longer exists");
+    return;
+  }
+  const identity = {
+    userId,
+    name: String(user.name),
+    avatarUrl: typeof user.avatar_url === "string" ? user.avatar_url : null,
+  };
 
   let roomPromise = rooms.get(pageId);
   if (!roomPromise) {
@@ -405,17 +486,71 @@ ws.on("connection", async (socket, request) => {
 
   room.clients.add(socket);
   room.canEdit.set(socket, access.canEdit);
+  const ownedAwarenessClients = new Set<number>();
+  room.awarenessClients.set(socket, ownedAwarenessClients);
+  // Membership changes must take effect for long-lived connections too. The
+  // check is intentionally repeated independently of incoming client traffic.
+  const accessTimer = setInterval(() => {
+    void getPageAccess(pageId, userId)
+      .then((latest) => {
+        if (!latest) {
+          socket.close(1008, "Page access revoked");
+          return;
+        }
+        room.canEdit.set(socket, latest.canEdit);
+      })
+      .catch(() => socket.close(1011, "Could not recheck page access"));
+  }, ACCESS_RECHECK_MS);
+  accessTimer.unref();
   socket.on("message", async (data) => {
     if (socket.readyState !== WebSocket.OPEN) return;
     try {
-      const decoder = decoding.createDecoder(toBytes(data));
+      const bytes = toBytes(data);
+      if (bytes.byteLength > MAX_MESSAGE_BYTES) {
+        socket.close(1009, "Message too large");
+        return;
+      }
+      // Use the latest capability, including changes detected by the timer.
+      const canEdit = room.canEdit.get(socket) === true;
+      const decoder = decoding.createDecoder(bytes);
       const messageType = decoding.readVarUint(decoder);
+      if (messageType === 1) {
+        if (bytes.byteLength > 64 * 1024) {
+          socket.close(1009, "Awareness update too large");
+          return;
+        }
+        const update = decoding.readVarUint8Array(decoder);
+        const sanitized = sanitizeAwarenessUpdate(
+          update,
+          identity,
+          ownedAwarenessClients,
+        );
+        awarenessProtocol.applyAwarenessUpdate(
+          room.awareness,
+          sanitized,
+          socket,
+        );
+        return;
+      }
+      if (messageType === 3) {
+        const encoder = encoding.createEncoder();
+        encoding.writeVarUint(encoder, 1);
+        encoding.writeVarUint8Array(
+          encoder,
+          awarenessProtocol.encodeAwarenessUpdate(
+            room.awareness,
+            [...room.awareness.getStates().keys()],
+          ),
+        );
+        socket.send(encoding.toUint8Array(encoder));
+        return;
+      }
       if (messageType !== 0) return;
       const syncMessageType = decoding.readVarUint(decoder);
       console.log(
         `[restore] websocket sync request page=${pageId} user=${userId} type=${syncMessageType} bytes=${toBytes(data).byteLength} stale=${room.stale}`,
       );
-      if (!access.canEdit && syncMessageType !== 0) {
+      if (!canEdit && syncMessageType !== 0) {
         // Ignore any client state from a view-only session, but keep the
         // socket open so it can continue receiving updates from editors.
         return;
@@ -457,6 +592,15 @@ ws.on("connection", async (socket, request) => {
     }
   });
   socket.on("close", () => {
+    clearInterval(accessTimer);
+    const awarenessClients = room.awarenessClients.get(socket);
+    if (awarenessClients?.size)
+      awarenessProtocol.removeAwarenessStates(
+        room.awareness,
+        [...awarenessClients],
+        socket,
+      );
+    room.awarenessClients.delete(socket);
     room.clients.delete(socket);
     room.canEdit.delete(socket);
   });
@@ -474,6 +618,30 @@ ws.on("connection", async (socket, request) => {
     `[restore] initial document sent page=${pageId} user=${userId} bytes=${initialSyncMessage.byteLength} paragraphs=${room.doc.getXmlFragment("default").length}`,
   );
   if (socket.readyState === WebSocket.OPEN) socket.send(initialSyncMessage);
+  // y-websocket publishes each client's own state on open but does not ask
+  // the server for the states already in the room. Send the current roster to
+  // every joining client so presence is symmetric regardless of join order.
+  const presentClientIds = [...room.awareness.getStates().entries()]
+    .filter(([, state]) =>
+      Boolean(
+        state.user &&
+          typeof state.user === "object" &&
+          typeof state.user.userId === "string",
+      ),
+    )
+    .map(([clientId]) => clientId);
+  if (presentClientIds.length && socket.readyState === WebSocket.OPEN) {
+    const awarenessMessage = encoding.createEncoder();
+    encoding.writeVarUint(awarenessMessage, 1);
+    encoding.writeVarUint8Array(
+      awarenessMessage,
+      awarenessProtocol.encodeAwarenessUpdate(
+        room.awareness,
+        presentClientIds,
+      ),
+    );
+    socket.send(encoding.toUint8Array(awarenessMessage));
+  }
 });
 
 ws.on("listening", () =>
