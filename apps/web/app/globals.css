@@ -220,6 +220,40 @@ button:active {
   height: 36px;
   box-shadow: var(--shadow-xs);
 }
+.password-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.password-field {
+  margin-bottom: 4px;
+}
+.password-input-wrap input {
+  flex: 1;
+  width: 0;
+}
+.password-visibility-toggle {
+  flex: 0 0 36px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text-muted);
+  box-shadow: var(--shadow-xs);
+  cursor: pointer;
+}
+.password-visibility-toggle:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.password-visibility-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 .field textarea {
   height: auto;
   min-height: 80px;

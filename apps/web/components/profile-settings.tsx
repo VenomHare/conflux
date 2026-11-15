@@ -44,7 +44,9 @@ export function ProfileSettingsPage() {
       setName(result.user.name);
       setNotice("Profile details saved.");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Profile could not be saved");
+      setError(
+        reason instanceof Error ? reason.message : "Profile could not be saved",
+      );
     } finally {
       setBusy(false);
     }
@@ -58,7 +60,8 @@ export function ProfileSettingsPage() {
       const data = new FormData();
       data.set("avatar", file);
       const uploaded = await uploadProfileImage(data);
-      if (!uploaded.url) throw new Error(uploaded.error ?? "Photo upload failed");
+      if (!uploaded.url)
+        throw new Error(uploaded.error ?? "Photo upload failed");
 
       const result = await api<{ user: typeof user }>(
         "/users/me",
@@ -67,7 +70,9 @@ export function ProfileSettingsPage() {
       setUser(result.user);
       setNotice("Profile photo updated.");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Photo upload failed");
+      setError(
+        reason instanceof Error ? reason.message : "Photo upload failed",
+      );
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -94,7 +99,10 @@ export function ProfileSettingsPage() {
             <UserRound size={14} aria-hidden="true" /> Your account
           </div>
           <h1>Your profile.</h1>
-          <p>A familiar name and photo help your team recognize you around Conflux.</p>
+          <p>
+            A familiar name and photo help your team recognize you around
+            Conflux.
+          </p>
         </div>
 
         <section className="settings-panel profile-photo-panel">
@@ -109,7 +117,9 @@ export function ProfileSettingsPage() {
             <div
               className="profile-photo-avatar"
               role={user.avatar_url ? "img" : undefined}
-              aria-label={user.avatar_url ? `${user.name} profile photo` : undefined}
+              aria-label={
+                user.avatar_url ? `${user.name} profile photo` : undefined
+              }
               style={{
                 backgroundColor: "var(--accent-subtle)",
                 backgroundImage: user.avatar_url
@@ -121,7 +131,9 @@ export function ProfileSettingsPage() {
             </div>
             <div className="profile-photo-copy">
               <strong>{user.name}</strong>
-              <span className="muted">Shown beside your comments and pages</span>
+              <span className="muted">
+                Shown beside your comments and pages
+              </span>
             </div>
             <input
               ref={fileRef}
@@ -141,7 +153,8 @@ export function ProfileSettingsPage() {
               disabled={uploading}
               onClick={() => fileRef.current?.click()}
             >
-              <ImagePlus size={15} /> {uploading ? "Uploading…" : "Upload photo"}
+              <ImagePlus size={15} />{" "}
+              {uploading ? "Uploading…" : "Upload photo"}
             </button>
           </div>
         </section>
@@ -150,10 +163,15 @@ export function ProfileSettingsPage() {
           <div className="settings-panel-heading">
             <div>
               <h2>Personal details</h2>
-              <p>Your email is used to sign in and receive workspace invitations.</p>
+              <p>
+                Your email is used to sign in and receive workspace invitations.
+              </p>
             </div>
           </div>
-          <form className="settings-form" onSubmit={(event) => void saveProfile(event)}>
+          <form
+            className="settings-form"
+            onSubmit={(event) => void saveProfile(event)}
+          >
             <div className="field">
               <label htmlFor="profile-name">Name</label>
               <input
@@ -166,8 +184,15 @@ export function ProfileSettingsPage() {
             </div>
             <div className="field">
               <label htmlFor="profile-email">Email address</label>
-              <input id="profile-email" type="email" value={user.email} readOnly />
-              <small className="muted">Email changes aren’t available yet.</small>
+              <input
+                id="profile-email"
+                type="email"
+                value={user.email}
+                readOnly
+              />
+              <small className="muted">
+                Email changes aren’t available yet.
+              </small>
             </div>
             <button className="primary" disabled={busy || !dirty}>
               <Save size={15} /> {busy ? "Saving…" : "Save changes"}
@@ -175,8 +200,16 @@ export function ProfileSettingsPage() {
           </form>
         </section>
 
-        {notice && <p className="settings-notice" role="status"><Check size={14} /> {notice}</p>}
-        {error && <p className="form-error settings-error" role="alert">{error}</p>}
+        {notice && (
+          <p className="settings-notice" role="status">
+            <Check size={14} /> {notice}
+          </p>
+        )}
+        {error && (
+          <p className="form-error settings-error" role="alert">
+            {error}
+          </p>
+        )}
       </main>
     </section>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Eye, EyeOff } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/client-api";
@@ -76,29 +77,32 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
               placeholder="you@company.com"
             />
           </div>
-          <div className="field">
+          <div className="field password-field">
             <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              name="password"
-              type={showPassword ? "text" : "password"}
-              autoComplete={login ? "current-password" : "new-password"}
-              required
-              minLength={login ? 1 : 12}
-              maxLength={72}
-              placeholder={login ? "Your password" : "At least 12 characters"}
-            />
+            <div className="password-input-wrap">
+              <input
+                id="password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete={login ? "current-password" : "new-password"}
+                required
+                minLength={login ? 1 : 12}
+                maxLength={72}
+                placeholder={login ? "Your password" : "At least 12 characters"}
+              />
+              <button
+                className="password-visibility-toggle"
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+              >
+                {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+              </button>
+            </div>
             {!login && (
               <small className="muted">Use at least 12 characters.</small>
             )}
-            <button
-              className="quiet"
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              aria-label={showPassword ? "Hide password" : "Show password"}
-            >
-              {showPassword ? "Hide password" : "Show password"}
-            </button>
           </div>
           {error && (
             <div className="form-error" role="alert">

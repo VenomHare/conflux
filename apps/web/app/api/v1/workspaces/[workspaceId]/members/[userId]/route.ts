@@ -1,5 +1,5 @@
 import { getDb } from "@repo/database";
-import { apiError, apiResponse, readJson } from "@/lib/api";
+import { apiError, apiResponse } from "@/lib/api";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { uuidSchema } from "@/lib/schemas/workspace";
 import { getWorkspaceMembership } from "@/lib/workspaces";
@@ -29,8 +29,8 @@ export async function PATCH(request: Request, context: RouteContext) {
   if ("error" in manager) return manager.error;
   if (!uuidSchema.safeParse(userId).success) return apiError("validation_error", "User id must be a UUID", 400);
 
-  const input = await readJson(request);
-  if (input === null) return apiError("invalid_request", "Send a valid JSON request under 16 KB", 400);
+  const input = await request.json().catch(() => null);
+  if (input === null) return apiError("invalid_request", "Send a valid JSON request", 400);
   const parsed = z.object({ role: memberRoleSchema }).strict().safeParse(input);
   if (!parsed.success) return apiError("validation_error", parsed.error.issues[0]?.message ?? "Invalid member role", 400);
 

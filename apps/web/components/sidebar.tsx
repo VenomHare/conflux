@@ -270,7 +270,7 @@ export function Sidebar({
         send("PATCH", { auto_snapshots_enabled: !page.auto_snapshots_enabled }),
       );
       onPagesChange(
-        pages.map((item) => item.id === page.id ? result.page : item),
+        pages.map((item) => (item.id === page.id ? result.page : item)),
       );
       setMenuPage(null);
     } catch (reason) {

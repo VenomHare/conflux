@@ -1,5 +1,5 @@
 import * as Y from "yjs";
-import { apiError, apiResponse, readJson } from "@/lib/api";
+import { apiError, apiResponse } from "@/lib/api";
 import {
   getPageHistoryAccess,
   combinePageUpdates,
@@ -25,11 +25,11 @@ export async function POST(request: Request, context: RouteContext) {
   }
   if ("error" in access) return access.error;
 
-  const input = await readJson(request, 3_000_000);
+  const input = await request.json().catch(() => null);
   if (input === null)
     return apiError(
       "invalid_request",
-      "Send a valid JSON request under 3 MB",
+      "Send a valid JSON request",
       400,
     );
   const parsed = createSnapshotSchema.safeParse(input);

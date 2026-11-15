@@ -1,13 +1,13 @@
 import { getDb } from "@repo/database";
-import { apiError, apiResponse, readJson } from "@/lib/api";
+import { apiError, apiResponse } from "@/lib/api";
 import { createSession, hashPassword, toPublicUser, type StoredUser } from "@/lib/auth";
 import { registerSchema } from "@/lib/schemas/auth";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const input = await readJson(request);
-  if (input === null) return apiError("invalid_request", "Send a valid JSON request under 16 KB", 400);
+  const input = await request.json().catch(() => null);
+  if (input === null) return apiError("invalid_request", "Send a valid JSON request", 400);
 
   const parsed = registerSchema.safeParse(input);
   if (!parsed.success) {

@@ -1,4 +1,4 @@
-import { apiError, apiResponse, readJson } from "@/lib/api";
+import { apiError, apiResponse } from "@/lib/api";
 import { canComment, getAccessiblePage } from "@/lib/comment-access";
 import { createCommentSchema } from "@/lib/schemas/comment";
 
@@ -22,11 +22,11 @@ export async function POST(request: Request, context: RouteContext) {
   if (!canComment(access.membership.role))
     return apiError("forbidden", "You cannot comment on this page", 403);
 
-  const input = await readJson(request);
+  const input = await request.json().catch(() => null);
   if (input === null)
     return apiError(
       "invalid_request",
-      "Send a valid JSON request under 16 KB",
+      "Send a valid JSON request",
       400,
     );
   const parsed = createCommentSchema.safeParse(input);

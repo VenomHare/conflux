@@ -1,5 +1,5 @@
 import { getDb } from "@repo/database";
-import { apiError, apiResponse, readJson } from "@/lib/api";
+import { apiError, apiResponse } from "@/lib/api";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { createPageSchema } from "@/lib/schemas/page";
 import { uuidSchema } from "@/lib/schemas/workspace";
@@ -21,8 +21,8 @@ export async function POST(request: Request, context: RouteContext) {
     return apiError("forbidden", "You cannot create pages in this workspace", 403);
   }
 
-  const input = await readJson(request);
-  if (input === null) return apiError("invalid_request", "Send a valid JSON request under 16 KB", 400);
+  const input = await request.json().catch(() => null);
+  if (input === null) return apiError("invalid_request", "Send a valid JSON request", 400);
   const parsed = createPageSchema.safeParse(input);
   if (!parsed.success) return apiError("validation_error", parsed.error.issues[0]?.message ?? "Invalid page", 400);
 

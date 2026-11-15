@@ -13,3 +13,4 @@ export async function GET(request: Request) {
     return apiError("service_unavailable", "Collaboration is temporarily unavailable", 503);
   }
 }
+

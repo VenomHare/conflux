@@ -1,12 +1,11 @@
 import "server-only";
 
-import { createHmac, timingSafeEqual } from "node:crypto";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import { getDb } from "@repo/database";
 
 const SESSION_TTL_SECONDS = 60 * 60 * 24;
 const BCRYPT_COST = 12;
-const dummyPasswordHash = bcrypt.hash("not-a-real-account-password", BCRYPT_COST);
 
 export type PublicUser = {
   id: string;
@@ -27,23 +26,24 @@ function secret(): string {
   return value;
 }
 
-function sign(payload: string): string {
-  return createHmac("sha256", secret()).update(payload).digest("base64url");
-}
-
 export async function createSession(userId: string) {
   const expiresAt = Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS;
-  const payload = Buffer.from(JSON.stringify({ sub: userId, exp: expiresAt })).toString("base64url");
   return {
-    token: `${payload}.${sign(payload)}`,
+    token: jwt.sign({}, secret(), {
+      algorithm: "HS256",
+      subject: userId,
+      expiresIn: SESSION_TTL_SECONDS,
+    }),
     expiresAt: new Date(expiresAt * 1000).toISOString(),
   };
 }
 
 export function createWebSocketToken(userId: string) {
-  const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60;
-  const payload = Buffer.from(JSON.stringify({ sub: userId, exp: expiresAt })).toString("base64url");
-  return `${payload}.${sign(payload)}`;
+  return jwt.sign({}, secret(), {
+    algorithm: "HS256",
+    subject: userId,
+    expiresIn: 60 * 60,
+  });
 }
 
 function getSessionUserId(request: Request): string | null {
@@ -52,28 +52,14 @@ function getSessionUserId(request: Request): string | null {
     .find((part) => part.startsWith("conflux_session="))?.slice("conflux_session=".length);
   const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : cookieToken;
   if (!token) return null;
-  const separator = token.indexOf(".");
-  if (separator < 1 || separator === token.length - 1) return null;
-
-  const payload = token.slice(0, separator);
-  const suppliedSignature = token.slice(separator + 1);
 
   try {
-    const expectedSignature = sign(payload);
-    const expected = Buffer.from(expectedSignature);
-    const supplied = Buffer.from(suppliedSignature);
-    if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) return null;
-
-    const claims: unknown = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    const claims = jwt.verify(token, secret(), { algorithms: ["HS256"] });
     if (
       typeof claims !== "object" ||
       claims === null ||
-      !("sub" in claims) ||
       typeof claims.sub !== "string" ||
-      !("exp" in claims) ||
-      typeof claims.exp !== "number" ||
-      !Number.isInteger(claims.exp) ||
-      claims.exp <= Math.floor(Date.now() / 1000)
+      typeof claims.exp !== "number"
     ) {
       return null;
     }
@@ -119,6 +105,3 @@ export async function verifyPassword(password: string, hash: string) {
   return bcrypt.compare(password, hash);
 }
 
-export async function verifyUnknownAccountPassword(password: string) {
-  return bcrypt.compare(password, await dummyPasswordHash);
-}

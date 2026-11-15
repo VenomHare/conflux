@@ -1,4 +1,4 @@
-import { apiError, apiResponse, readJson } from "@/lib/api";
+import { apiError, apiResponse } from "@/lib/api";
 import { canManageAllComments, getAccessibleComment } from "@/lib/comment-access";
 import { updateCommentSchema } from "@/lib/schemas/comment";
 
@@ -30,8 +30,8 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (access.comment.author_id !== access.user.id && !canManageAllComments(access.membership.role)) {
     return apiError("forbidden", "You can only edit your own comments", 403);
   }
-  const input = await readJson(request);
-  if (input === null) return apiError("invalid_request", "Send a valid JSON request under 16 KB", 400);
+  const input = await request.json().catch(() => null);
+  if (input === null) return apiError("invalid_request", "Send a valid JSON request", 400);
   const parsed = updateCommentSchema.safeParse(input);
   if (!parsed.success) return apiError("validation_error", parsed.error.issues[0]?.message ?? "Invalid comment", 400);
   try {

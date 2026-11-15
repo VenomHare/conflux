@@ -231,7 +231,6 @@ These are optional custom events for application features beyond Yjs synchroniza
 - Manage awareness and online presence.
 - Validate permissions before accepting document modifications.
 - Handle disconnections and reconnections.
-- Use Redis Pub/Sub for communication between multiple WebSocket server instances.
 
 ---
 

@@ -1,5 +1,5 @@
 import { getDb } from "@repo/database";
-import { apiError, apiResponse, readJson } from "@/lib/api";
+import { apiError, apiResponse } from "@/lib/api";
 import { getAuthenticatedUser, toPublicUser } from "@/lib/auth";
 import { updateProfileSchema } from "@/lib/schemas/auth";
 
@@ -20,8 +20,8 @@ export async function PATCH(request: Request) {
   const currentUser = await getAuthenticatedUser(request).catch(() => null);
   if (!currentUser) return apiError("unauthorized", "Sign in to continue", 401);
 
-  const input = await readJson(request);
-  if (input === null) return apiError("invalid_request", "Send a valid JSON request under 16 KB", 400);
+  const input = await request.json().catch(() => null);
+  if (input === null) return apiError("invalid_request", "Send a valid JSON request", 400);
 
   const parsed = updateProfileSchema.safeParse(input);
   if (!parsed.success) {

@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import jwt from "jsonwebtoken";
 import * as Y from "yjs";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
@@ -35,7 +35,12 @@ function toBytes(data: RawData): Uint8Array {
 
 function sanitizeAwarenessUpdate(
   update: Uint8Array,
-  identity: { userId: string; name: string; avatarUrl: string | null; color: string },
+  identity: {
+    userId: string;
+    name: string;
+    avatarUrl: string | null;
+    color: string;
+  },
   ownedClients: Set<number>,
 ) {
   const decoder = decoding.createDecoder(update);
@@ -78,33 +83,13 @@ function sanitizeAwarenessUpdate(
 
 function getUserId(token: string | null): string | null {
   if (!token) return null;
-  const separator = token.indexOf(".");
-  if (separator < 1 || separator === token.length - 1) return null;
-
-  const payload = token.slice(0, separator);
-  const signature = token.slice(separator + 1);
-  const expected = Buffer.from(
-    createHmac("sha256", AUTH_SECRET!).update(payload).digest("base64url"),
-  );
-  const supplied = Buffer.from(signature);
-  if (
-    expected.length !== supplied.length ||
-    !timingSafeEqual(expected, supplied)
-  )
-    return null;
-
   try {
-    const claims: unknown = JSON.parse(
-      Buffer.from(payload, "base64url").toString("utf8"),
-    );
+    const claims = jwt.verify(token, AUTH_SECRET!, { algorithms: ["HS256"] });
     if (
       typeof claims !== "object" ||
       claims === null ||
-      !("sub" in claims) ||
       typeof claims.sub !== "string" ||
-      !("exp" in claims) ||
-      typeof claims.exp !== "number" ||
-      claims.exp <= Math.floor(Date.now() / 1000)
+      typeof claims.exp !== "number"
     ) {
       return null;
     }
@@ -326,29 +311,34 @@ async function loadRoom(pageId: string): Promise<Room | null> {
   room.awareness.on(
     "update",
     (
-      { added, updated, removed }: {
+      {
+        added,
+        updated,
+        removed,
+      }: {
         added: number[];
         updated: number[];
         removed: number[];
       },
       origin: unknown,
     ) => {
-    const changed = [...added, ...updated, ...removed];
-    if (changed.length === 0) return;
-    const encoder = encoding.createEncoder();
-    encoding.writeVarUint(encoder, 1);
-    encoding.writeVarUint8Array(
-      encoder,
-      awarenessProtocol.encodeAwarenessUpdate(room.awareness, changed),
-    );
-    const message = encoding.toUint8Array(encoder);
-    for (const client of room.clients) {
-      if (
-        client !== origin &&
-        client.readyState === WebSocket.OPEN &&
-        message.byteLength <= MAX_MESSAGE_BYTES
-      ) client.send(message);
-    }
+      const changed = [...added, ...updated, ...removed];
+      if (changed.length === 0) return;
+      const encoder = encoding.createEncoder();
+      encoding.writeVarUint(encoder, 1);
+      encoding.writeVarUint8Array(
+        encoder,
+        awarenessProtocol.encodeAwarenessUpdate(room.awareness, changed),
+      );
+      const message = encoding.toUint8Array(encoder);
+      for (const client of room.clients) {
+        if (
+          client !== origin &&
+          client.readyState === WebSocket.OPEN &&
+          message.byteLength <= MAX_MESSAGE_BYTES
+        )
+          client.send(message);
+      }
     },
   );
   Y.applyUpdate(room.persistedDoc, Y.encodeStateAsUpdate(doc));
@@ -411,11 +401,11 @@ async function persistRoomChanges(pageId: string, room: Room) {
     try {
       await db.transaction(async (tx) => {
         const updatedAt = new Date().toISOString();
-        const page = await tx.orm.public!.Page!
-          .where({ id: pageId, deleted_at: null })
+        const page = await tx.orm
+          .public!.Page!.where({ id: pageId, deleted_at: null })
           .update({ updated_at: updatedAt });
-        const updates = (await tx.orm.public!.PageUpdate!
-          .where({ page_id: pageId })
+        const updates = (await tx.orm
+          .public!.PageUpdate!.where({ page_id: pageId })
           .all()) as unknown as { update: unknown }[];
         if (!matchesPersistedDocument(room.persistedDoc, updates)) {
           staleRoom = true;
@@ -431,7 +421,9 @@ async function persistRoomChanges(pageId: string, room: Room) {
     } catch (error) {
       if (staleRoom) {
         await evictStaleRoom(pageId, room);
-        throw new Error("Document was restored; reconnect to the current version");
+        throw new Error(
+          "Document was restored; reconnect to the current version",
+        );
       }
       throw error;
     }
@@ -445,7 +437,7 @@ async function persistRoomChanges(pageId: string, room: Room) {
   room.persistQueue = operation.catch((error: unknown) => {
     console.error(
       `[persistence] update failed page=${pageId}: ${error instanceof Error ? error.message : "unknown error"}`,
-      );
+    );
     for (const client of room.clients) {
       if (client.readyState === WebSocket.OPEN)
         client.close(1011, "Document persistence failed");
@@ -456,7 +448,9 @@ async function persistRoomChanges(pageId: string, room: Room) {
 
 async function createAutomaticSnapshots() {
   const startedAt = Date.now();
-  console.log(`[snapshots] scheduler tick intervalMs=${AUTO_SNAPSHOT_INTERVAL_MS}`);
+  console.log(
+    `[snapshots] scheduler tick intervalMs=${AUTO_SNAPSHOT_INTERVAL_MS}`,
+  );
   if (snapshotJobRunning) {
     console.log("[snapshots] previous run still active; this tick skipped");
     return;
@@ -464,8 +458,8 @@ async function createAutomaticSnapshots() {
   snapshotJobRunning = true;
   try {
     const db = await getDb();
-    const pages = await db.orm.public!.Page!
-      .where({ auto_snapshots_enabled: true, deleted_at: null })
+    const pages = await db.orm
+      .public!.Page!.where({ auto_snapshots_enabled: true, deleted_at: null })
       .all();
     console.log(`[snapshots] enabled pages found count=${pages.length}`);
     for (const page of pages) {
@@ -474,72 +468,82 @@ async function createAutomaticSnapshots() {
         typeof page.created_by !== "string" ||
         typeof page.updated_at !== "string"
       ) {
-        console.warn("[snapshots] enabled page skipped: incomplete page metadata");
+        console.warn(
+          "[snapshots] enabled page skipped: incomplete page metadata",
+        );
         continue;
       }
       const outcome = await db.transaction(async (tx) => {
-          const current = await tx.orm.public!.Page!
-            .where({ id: page.id, deleted_at: null })
-            .first();
-          if (!current || typeof current.updated_at !== "string")
-            return { kind: "page_missing" as const };
-          const revisionLabel = `auto:${current.updated_at}`;
-          const existing = await tx.orm.public!.PageSnapshot!
-            .where({ page_id: page.id, label: revisionLabel })
-            .first();
-          if (existing) return { kind: "unchanged" as const };
-          const updates = (await tx.orm.public!.PageUpdate!
-            .where({ page_id: page.id })
-            .all()) as unknown as { update: unknown }[];
-          if (updates.length === 0) return { kind: "no_persisted_updates" as const };
-          const document = new Y.Doc();
-          let state: Uint8Array;
-          try {
-            for (const update of updates) {
-              if (!(update.update instanceof Uint8Array))
-                throw new Error("Stored page update is not binary");
-              Y.applyUpdate(document, update.update);
-            }
-            state = Y.encodeStateAsUpdate(document);
-          } finally {
-            document.destroy();
-          }
-          await tx.orm.public!.PageSnapshot!.create({
+        const current = await tx.orm
+          .public!.Page!.where({ id: page.id, deleted_at: null })
+          .first();
+        if (!current || typeof current.updated_at !== "string")
+          return { kind: "page_missing" as const };
+        const revisionLabel = `auto:${current.updated_at}`;
+        const existing = await tx.orm
+          .public!.PageSnapshot!.where({
             page_id: page.id,
-            created_by: page.created_by,
-            document_state: state,
             label: revisionLabel,
-          });
-          const automatic = (await tx.orm.public!.PageSnapshot!
-            .where({ page_id: page.id })
-            .all())
-            .filter((snapshot) =>
+          })
+          .first();
+        if (existing) return { kind: "unchanged" as const };
+        const updates = (await tx.orm
+          .public!.PageUpdate!.where({ page_id: page.id })
+          .all()) as unknown as { update: unknown }[];
+        if (updates.length === 0)
+          return { kind: "no_persisted_updates" as const };
+        const document = new Y.Doc();
+        let state: Uint8Array;
+        try {
+          for (const update of updates) {
+            if (!(update.update instanceof Uint8Array))
+              throw new Error("Stored page update is not binary");
+            Y.applyUpdate(document, update.update);
+          }
+          state = Y.encodeStateAsUpdate(document);
+        } finally {
+          document.destroy();
+        }
+        await tx.orm.public!.PageSnapshot!.create({
+          page_id: page.id,
+          created_by: page.created_by,
+          document_state: state,
+          label: revisionLabel,
+        });
+        const automatic = (
+          await tx.orm.public!.PageSnapshot!.where({ page_id: page.id }).all()
+        )
+          .filter(
+            (snapshot) =>
               typeof snapshot.label === "string" &&
               snapshot.label.startsWith("auto:"),
-            )
-            .sort((left, right) =>
+          )
+          .sort(
+            (left, right) =>
               Date.parse(right.created_at as string) -
               Date.parse(left.created_at as string),
-            );
-          for (const oldSnapshot of automatic.slice(AUTO_SNAPSHOT_RETENTION)) {
-            if (typeof oldSnapshot.id === "string")
-              await tx.orm.public!.PageSnapshot!
-                .where({ id: oldSnapshot.id })
-                .delete();
-          }
-          return {
-            kind: "created" as const,
-            revision: current.updated_at,
-            bytes: state.byteLength,
-            retained: Math.min(automatic.length + 1, AUTO_SNAPSHOT_RETENTION),
-          };
+          );
+        for (const oldSnapshot of automatic.slice(AUTO_SNAPSHOT_RETENTION)) {
+          if (typeof oldSnapshot.id === "string")
+            await tx.orm
+              .public!.PageSnapshot!.where({ id: oldSnapshot.id })
+              .delete();
+        }
+        return {
+          kind: "created" as const,
+          revision: current.updated_at,
+          bytes: state.byteLength,
+          retained: Math.min(automatic.length + 1, AUTO_SNAPSHOT_RETENTION),
+        };
       });
       if (outcome.kind === "created") {
         console.log(
           `[snapshots] snapshot created page=${page.id} revision=${outcome.revision} bytes=${outcome.bytes} retained=${outcome.retained}`,
         );
       } else {
-        console.log(`[snapshots] page skipped page=${page.id} reason=${outcome.kind}`);
+        console.log(
+          `[snapshots] page skipped page=${page.id} reason=${outcome.kind}`,
+        );
       }
     }
     console.log(
@@ -690,10 +694,9 @@ ws.on("connection", async (socket, request) => {
         encoding.writeVarUint(encoder, 1);
         encoding.writeVarUint8Array(
           encoder,
-          awarenessProtocol.encodeAwarenessUpdate(
-            room.awareness,
-            [...room.awareness.getStates().keys()],
-          ),
+          awarenessProtocol.encodeAwarenessUpdate(room.awareness, [
+            ...room.awareness.getStates().keys(),
+          ]),
         );
         socket.send(encoding.toUint8Array(encoder));
         return;
@@ -727,7 +730,10 @@ ws.on("connection", async (socket, request) => {
       if (syncMessageType !== 0) {
         const updateEncoder = encoding.createEncoder();
         encoding.writeVarUint(updateEncoder, 0);
-        syncProtocol.writeUpdate(updateEncoder, Y.encodeStateAsUpdate(room.doc));
+        syncProtocol.writeUpdate(
+          updateEncoder,
+          Y.encodeStateAsUpdate(room.doc),
+        );
         const updateMessage = encoding.toUint8Array(updateEncoder);
         let peers = 0;
         for (const client of room.clients) {
@@ -766,7 +772,8 @@ ws.on("connection", async (socket, request) => {
     room.clients.delete(socket);
     room.canEdit.delete(socket);
     room.users.delete(socket);
-    if (![...room.users.values()].includes(userId)) room.userColors.delete(userId);
+    if (![...room.users.values()].includes(userId))
+      room.userColors.delete(userId);
   });
   socket.on("error", (error) =>
     console.error(`[restore] websocket error page=${pageId}: ${String(error)}`),
@@ -789,8 +796,8 @@ ws.on("connection", async (socket, request) => {
     .filter(([, state]) =>
       Boolean(
         state.user &&
-          typeof state.user === "object" &&
-          typeof state.user.userId === "string",
+        typeof state.user === "object" &&
+        typeof state.user.userId === "string",
       ),
     )
     .map(([clientId]) => clientId);
@@ -799,10 +806,7 @@ ws.on("connection", async (socket, request) => {
     encoding.writeVarUint(awarenessMessage, 1);
     encoding.writeVarUint8Array(
       awarenessMessage,
-      awarenessProtocol.encodeAwarenessUpdate(
-        room.awareness,
-        presentClientIds,
-      ),
+      awarenessProtocol.encodeAwarenessUpdate(room.awareness, presentClientIds),
     );
     socket.send(encoding.toUint8Array(awarenessMessage));
   }

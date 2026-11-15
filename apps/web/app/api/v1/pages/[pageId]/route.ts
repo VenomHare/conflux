@@ -1,5 +1,5 @@
 import { getDb } from "@repo/database";
-import { apiError, apiResponse, readJson } from "@/lib/api";
+import { apiError, apiResponse } from "@/lib/api";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { updatePageSchema } from "@/lib/schemas/page";
 import { uuidSchema } from "@/lib/schemas/workspace";
@@ -51,8 +51,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     return apiError("forbidden", "You cannot update this page", 403);
   }
 
-  const input = await readJson(request, 3_000_000);
-  if (input === null) return apiError("invalid_request", "Send a valid JSON request under 3 MB", 400);
+  const input = await request.json().catch(() => null);
+  if (input === null) return apiError("invalid_request", "Send a valid JSON request", 400);
   const parsed = updatePageSchema.safeParse(input);
   if (!parsed.success) return apiError("validation_error", parsed.error.issues[0]?.message ?? "Invalid page", 400);
   if (
