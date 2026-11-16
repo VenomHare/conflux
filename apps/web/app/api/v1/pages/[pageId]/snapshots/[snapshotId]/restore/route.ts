@@ -3,6 +3,7 @@ import { apiError, apiResponse } from "@/lib/api";
 import { getPageHistoryAccess, isBinaryState } from "@/lib/version-history";
 import { clearPageDocumentCache } from "@/lib/redis";
 import { uuidSchema } from "@/lib/schemas/workspace";
+import { debugLog } from "@/lib/debug";
 
 export const runtime = "nodejs";
 
@@ -11,19 +12,19 @@ export async function POST(
   context: { params: Promise<{ pageId: string; snapshotId: string }> },
 ) {
   const { pageId, snapshotId } = await context.params;
-  console.log(
+  debugLog(
     `[restore] request page=${pageId} snapshot=${snapshotId} method=${request.method}`,
   );
   try {
     const access = await getPageHistoryAccess(request, pageId, true);
     if ("error" in access) {
-      console.log(
+      debugLog(
         `[restore] access denied page=${pageId} snapshot=${snapshotId}`,
       );
       return access.error;
     }
     if (!uuidSchema.safeParse(snapshotId).success) {
-      console.log(
+      debugLog(
         `[restore] invalid snapshot id page=${pageId} snapshot=${snapshotId}`,
       );
       return apiError("validation_error", "Snapshot id must be a UUID", 400);
@@ -35,18 +36,18 @@ export async function POST(
         page_id: pageId,
       }).first();
       if (!snapshot) {
-        console.log(
+        debugLog(
           `[restore] snapshot not found page=${pageId} snapshot=${snapshotId}`,
         );
         return { error: "not_found" as const };
       }
       if (!isBinaryState(snapshot.document_state)) {
-        console.log(
+        debugLog(
           `[restore] invalid snapshot state page=${pageId} snapshot=${snapshotId} type=${typeof snapshot.document_state}`,
         );
         return { error: "invalid_snapshot" as const };
       }
-      console.log(
+      debugLog(
         `[restore] snapshot selected page=${pageId} snapshot=${snapshotId} created=${snapshot.created_at} bytes=${snapshot.document_state.byteLength}`,
       );
 
@@ -63,7 +64,7 @@ export async function POST(
       const restoreTimestamp = new Date(
         Math.max(Date.now(), previousTimestamp + 1),
       ).toISOString();
-      console.log(
+      debugLog(
         `[restore] page locked page=${pageId} previousUpdatedAt=${previousPage?.updated_at ?? "none"} restoreUpdatedAt=${restoreTimestamp}`,
       );
       await tx.orm.public.Page.where({ id: pageId, deleted_at: null }).update({
@@ -81,7 +82,7 @@ export async function POST(
       const existingUpdates = (await tx.orm.public.PageUpdate.where({
         page_id: pageId,
       }).all()) as unknown as { id: string }[];
-      console.log(
+      debugLog(
         `[restore] replacing database updates page=${pageId} snapshot=${snapshotId} oldCount=${existingUpdates.length}`,
       );
       for (const update of existingUpdates) {
@@ -93,7 +94,7 @@ export async function POST(
         page_id: pageId,
         update: restoredUpdate,
       });
-      console.log(
+      debugLog(
         `[restore] database update saved page=${pageId} snapshot=${snapshotId} bytes=${restoredUpdate.byteLength}`,
       );
       return { ok: true as const };
@@ -104,10 +105,10 @@ export async function POST(
       return apiError("service_unavailable", "Snapshot data is invalid", 503);
     }
     const cacheCleared = await clearPageDocumentCache(pageId);
-    console.log(
+    debugLog(
       `[restore] Redis cache ${cacheCleared ? "cleared" : "clear failed; cache will be rejected by updatedAt"} page=${pageId}`,
     );
-    console.log(
+    debugLog(
       `[restore] complete page=${pageId} snapshot=${snapshotId} restored=${result.ok}`,
     );
     return apiResponse({ restored: result.ok });

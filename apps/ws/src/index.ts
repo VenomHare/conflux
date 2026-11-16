@@ -6,6 +6,7 @@ import * as syncProtocol from "y-protocols/sync";
 import * as awarenessProtocol from "y-protocols/awareness";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import { getDb } from "@repo/database";
+import { debugLog } from "./debug";
 
 const SESSION_COOKIE = "conflux_session=";
 const EDIT_ROLES = new Set(["OWNER", "ADMIN", "EDITOR"]);
@@ -295,7 +296,7 @@ async function cacheDocument(
       pageDocumentCacheKey(pageId),
       JSON.stringify({ updatedAt, state }),
     );
-    console.log(
+    debugLog(
       `[restore] Redis cache updated page=${pageId} updatedAt=${updatedAt} bytes=${Buffer.from(state, "base64").byteLength}`,
     );
   } catch (error) {
@@ -329,7 +330,7 @@ async function evictStaleRoom(pageId: string, room: Room) {
   const currentRoom = await rooms.get(pageId);
   if (currentRoom !== room) return;
   room.stale = true;
-  console.log(
+  debugLog(
     `[restore] stale room evicted page=${pageId} clients=${room.clients.size} persistedVectorBytes=${Y.encodeStateVector(room.persistedDoc).byteLength} liveVectorBytes=${Y.encodeStateVector(room.doc).byteLength}`,
   );
   if (room.refreshTimer) clearInterval(room.refreshTimer);
@@ -357,7 +358,7 @@ async function loadRoom(pageId: string): Promise<Room | null> {
     : ((await db.orm
         .public!.PageUpdate!.where({ page_id: pageId })
         .all()) as unknown as { update: unknown }[]);
-  console.log(
+  debugLog(
     `[restore] loading room page=${pageId} source=${cachedState ? "redis" : "database"} updateCount=${updates.length} cachedBytes=${cachedState?.byteLength ?? 0}`,
   );
   const doc = new Y.Doc();
@@ -429,7 +430,7 @@ async function loadRoom(pageId: string): Promise<Room | null> {
   );
   Y.applyUpdate(room.persistedDoc, Y.encodeStateAsUpdate(doc));
   await subscribeToRoom(pageId, room);
-  console.log(
+  debugLog(
     `[restore] room loaded page=${pageId} updatedAt=${room.updatedAt} stateVectorBytes=${Y.encodeStateVector(doc).byteLength} paragraphs=${doc.getXmlFragment("default").length}`,
   );
 
@@ -452,7 +453,7 @@ async function loadRoom(pageId: string): Promise<Room | null> {
           .public!.PageUpdate!.where({ page_id: pageId })
           .all()) as unknown as { update: unknown }[];
         if (!matchesPersistedDocument(room.persistedDoc, updates)) {
-          console.log(
+          debugLog(
             `[restore] refresh found replacement page=${pageId} roomUpdatedAt=${room.updatedAt} databaseUpdatedAt=${page.updated_at} databaseUpdateCount=${updates.length}`,
           );
           await evictStaleRoom(pageId, room);
@@ -478,7 +479,7 @@ async function persistRoomChanges(pageId: string, room: Room) {
       Y.encodeStateVector(room.persistedDoc),
     );
     if (pendingUpdate.byteLength <= 2) return;
-    console.log(
+    debugLog(
       `[persistence] update queued page=${pageId} bytes=${pendingUpdate.byteLength}`,
     );
 
@@ -522,7 +523,7 @@ async function persistRoomChanges(pageId: string, room: Room) {
       state: Buffer.from(pendingUpdate).toString("base64"),
       updatedAt: room.updatedAt,
     });
-    console.log(
+    debugLog(
       `[persistence] update committed page=${pageId} bytes=${pendingUpdate.byteLength} updatedAt=${persistedAt}`,
     );
   });
@@ -540,11 +541,11 @@ async function persistRoomChanges(pageId: string, room: Room) {
 
 async function createAutomaticSnapshots() {
   const startedAt = Date.now();
-  console.log(
+  debugLog(
     `[snapshots] scheduler tick intervalMs=${AUTO_SNAPSHOT_INTERVAL_MS}`,
   );
   if (snapshotJobRunning) {
-    console.log("[snapshots] previous run still active; this tick skipped");
+    debugLog("[snapshots] previous run still active; this tick skipped");
     return;
   }
   snapshotJobRunning = true;
@@ -553,7 +554,7 @@ async function createAutomaticSnapshots() {
     const pages = await db.orm
       .public!.Page!.where({ auto_snapshots_enabled: true, deleted_at: null })
       .all();
-    console.log(`[snapshots] enabled pages found count=${pages.length}`);
+    debugLog(`[snapshots] enabled pages found count=${pages.length}`);
     for (const page of pages) {
       if (
         typeof page.id !== "string" ||
@@ -629,16 +630,16 @@ async function createAutomaticSnapshots() {
         };
       });
       if (outcome.kind === "created") {
-        console.log(
+        debugLog(
           `[snapshots] snapshot created page=${page.id} revision=${outcome.revision} bytes=${outcome.bytes} retained=${outcome.retained}`,
         );
       } else {
-        console.log(
+        debugLog(
           `[snapshots] page skipped page=${page.id} reason=${outcome.kind}`,
         );
       }
     }
-    console.log(
+    debugLog(
       `[snapshots] scheduler complete pages=${pages.length} durationMs=${Date.now() - startedAt}`,
     );
   } catch (error) {
@@ -655,7 +656,7 @@ const automaticSnapshotTimer = setInterval(
   AUTO_SNAPSHOT_INTERVAL_MS,
 );
 automaticSnapshotTimer.unref();
-console.log(
+debugLog(
   `[snapshots] scheduler started intervalMs=${AUTO_SNAPSHOT_INTERVAL_MS} retention=${AUTO_SNAPSHOT_RETENTION}`,
 );
 
@@ -719,7 +720,7 @@ ws.on("connection", async (socket, request) => {
   const currentUpdates = (await access.db.orm
     .public!.PageUpdate!.where({ page_id: pageId })
     .all()) as unknown as { update: unknown }[];
-  console.log(
+  debugLog(
     `[restore] websocket joined page=${pageId} user=${userId} roomUpdatedAt=${room.updatedAt} databaseUpdatedAt=${currentPage?.updated_at ?? "missing"} databaseUpdateCount=${currentUpdates.length}`,
   );
   if (
@@ -795,7 +796,7 @@ ws.on("connection", async (socket, request) => {
       }
       if (messageType !== 0) return;
       const syncMessageType = decoding.readVarUint(decoder);
-      console.log(
+      debugLog(
         `[restore] websocket sync request page=${pageId} user=${userId} type=${syncMessageType} bytes=${toBytes(data).byteLength} stale=${room.stale}`,
       );
       if (!canEdit && syncMessageType !== 0) {
@@ -834,13 +835,13 @@ ws.on("connection", async (socket, request) => {
             peers += 1;
           }
         }
-        console.log(
+        debugLog(
           `[restore] live update broadcast page=${pageId} user=${userId} type=${syncMessageType} bytes=${updateMessage.byteLength} peers=${peers}`,
         );
       }
       if (socket.readyState !== WebSocket.OPEN) return;
       const response = encoding.toUint8Array(encoder);
-      console.log(
+      debugLog(
         `[restore] websocket sync response page=${pageId} user=${userId} requestType=${syncMessageType} bytes=${response.byteLength} paragraphs=${room.doc.getXmlFragment("default").length}`,
       );
       if (response.byteLength > 1) socket.send(response);
@@ -877,7 +878,7 @@ ws.on("connection", async (socket, request) => {
   encoding.writeVarUint(initialSync, 0);
   syncProtocol.writeSyncStep2(initialSync, room.doc);
   const initialSyncMessage = encoding.toUint8Array(initialSync);
-  console.log(
+  debugLog(
     `[restore] initial document sent page=${pageId} user=${userId} bytes=${initialSyncMessage.byteLength} paragraphs=${room.doc.getXmlFragment("default").length}`,
   );
   if (socket.readyState === WebSocket.OPEN) socket.send(initialSyncMessage);

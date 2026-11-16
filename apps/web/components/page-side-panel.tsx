@@ -9,6 +9,7 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Collaboration } from "@tiptap/extension-collaboration";
 import * as Y from "yjs";
+import { debugLog } from "@/lib/debug";
 import { AppDialog } from "@/components/app-dialog";
 
 type CommentRecord = {
@@ -157,7 +158,7 @@ export function PageSidePanel({
   async function restore() {
     if (!selected) return;
     setRestoreDialogOpen(false);
-    console.log(
+    debugLog(
       `[restore] requested page=${pageId} snapshot=${selected.id} label=${selected.label ?? ""} created=${selected.created_at} snapshotChars=${selected.document_state?.length ?? 0} currentStateVectorBytes=${Y.encodeStateVector(doc).byteLength}`,
     );
     setBusy(true);
@@ -167,7 +168,7 @@ export function PageSidePanel({
         `/pages/${pageId}/snapshots/${selected.id}/restore`,
         send("POST"),
       );
-      console.log(
+      debugLog(
         `[restore] response page=${pageId} snapshot=${selected.id} restored=${result.restored}`,
       );
       window.location.reload();

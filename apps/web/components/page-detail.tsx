@@ -17,6 +17,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { Collaboration } from "@tiptap/extension-collaboration";
 import { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
+import { debugLog } from "@/lib/debug";
 
 type AwarenessRef = {
   current: { getStates(): Map<number, Record<string, unknown>> } | null;
@@ -281,7 +282,7 @@ export function PageDetail() {
         };
         if (!canEditPage) connectionDoc.on("update", bridgeRemoteUpdates);
         provider.on("status", ({ status: connectionStatus }) => {
-          console.log(
+          debugLog(
             `[restore] websocket status page=${pageId} status=${connectionStatus}`,
           );
           if (disposed) return;
@@ -300,7 +301,7 @@ export function PageDetail() {
           setStatus(canEditPage ? "Connected" : "View only");
         });
         provider.on("closed", ({ code, reason }) => {
-          console.log(
+          debugLog(
             `[restore] websocket closed page=${pageId} code=${code} reason=${reason}`,
           );
           if (code === 4401) {

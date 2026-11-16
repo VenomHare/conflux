@@ -91,6 +91,13 @@ cp .env.example packages/database/.env
 cp .env.example apps/web/.env
 ```
 
+Set `DEBUG_MODE=true` in the root `.env` (and in `apps/web/.env` if you start
+the web app separately) and restart the services to enable diagnostic logs for
+WebSocket collaboration, snapshot restoration, and browser connection events.
+Leave it as `false` (the default) for normal use. The web application reads the
+flag when Next.js starts/builds, so restart or rebuild after changing it.
+Error logs remain enabled regardless of this setting.
+
 The WebSocket service reads the root `.env`; the web app and database package
 also read their own `.env` files. Use the same `AUTH_SECRET` in the web app and
 WebSocket service. Set it to a random value with at least 32 characters; the
