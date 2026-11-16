@@ -10,7 +10,6 @@
     "db:migrate:deploy": "prisma db migrate",
     "db:migrate:dev": "prisma db update",
     "db:push": "prisma db update",
-    "db:seed": "tsx src/seed.ts",
     "dev": "tsup src/client.ts --format esm --watch",
     "format": "prisma contract format",
     "generate": "prisma contract emit",

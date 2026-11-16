@@ -1,0 +1,23 @@
+{
+  "name": "@repo/seed",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "db:seed": "tsx src/seed.ts",
+    "db:seed:demo": "tsx src/seed.ts",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
+  },
+  "dependencies": {
+    "@repo/database": "workspace:*",
+    "bcrypt": "^6.0.0"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "*",
+    "@repo/typescript-config": "*",
+    "@types/bcrypt": "^6.0.0",
+    "eslint": "10.13.0",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}

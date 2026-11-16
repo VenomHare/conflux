@@ -102,6 +102,22 @@
         "typescript": "7.0.2",
       },
     },
+    "packages/seed": {
+      "name": "@repo/seed",
+      "version": "1.0.0",
+      "dependencies": {
+        "@repo/database": "workspace:*",
+        "bcrypt": "^6.0.0",
+      },
+      "devDependencies": {
+        "@repo/eslint-config": "*",
+        "@repo/typescript-config": "*",
+        "@types/bcrypt": "^6.0.0",
+        "eslint": "10.13.0",
+        "tsx": "4.23.15",
+        "typescript": "7.0.2",
+      },
+    },
   },
   "packages": {
     "@alchemy.run/cloudflare-runtime": ["@alchemy.run/cloudflare-runtime@2.0.0-beta.83", "", { "dependencies": { "@alchemy.run/node-utils": "2.0.0-beta.83", "@cloudflare/unenv-preset": "^2.16.1", "@puppeteer/browsers": "^3.2.0", "capnp-es": "^0.0.16", "magic-string": "^0.30.21", "mime": "^4.0.7", "sharp": "^0.35.3", "unenv": "^2.0.0-rc.24", "workerd": "1.20261002.1", "yauzl": "^3.4.0" }, "peerDependencies": { "@distilled.cloud/cloudflare": "1.0.0-rc.15", "@effect/platform-bun": "^4.0.0", "@effect/platform-node": "^4.0.0", "effect": "^4.0.0", "rolldown": "1.2.5", "vite": "^7.0.0 || ^8.0.0" }, "optionalPeers": ["@effect/platform-bun", "@effect/platform-node", "rolldown", "vite"] }, "sha512-tchwc16KccR3Q8fmEZSqJcXRPJ0mV0Y3LEu7VbdE6R3e0VqKFNnz5xYiCfQWUAahB+QtJDtTu3/nkjOajE3ggQ=="],
@@ -583,6 +599,8 @@
     "@repo/database": ["@repo/database@workspace:packages/database"],
 
     "@repo/eslint-config": ["@repo/eslint-config@workspace:packages/config-eslint"],
+
+    "@repo/seed": ["@repo/seed@workspace:packages/seed"],
 
     "@repo/typescript-config": ["@repo/typescript-config@workspace:packages/config-typescript"],
 

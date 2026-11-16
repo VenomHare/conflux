@@ -1,8 +1,17 @@
 # Conflux — Project Specification
 
+This document describes Conflux's product behavior, data model, and technical
+architecture. For a quick project overview and local setup, see the root
+[README](README.md).
+
 ## 1. Application Goal
 
-Conflux is a real-time collaborative workspace where users can create workspaces, invite team members, and collaboratively create and edit rich-text documents. Multiple users can work on the same document simultaneously, see each other's live cursors and online presence, and have their changes synchronized without conflicts using Yjs CRDTs over WebSockets. The application supports workspace and member management, role-based permissions (Viewer, Commenter, Editor, Admin, Owner), threaded comments, automatic document persistence, version history, and document restoration. The goal is to deliver a reliable, scalable collaborative editing experience with support for concurrent users, network interruptions, and multiple collaboration server instances.
+Conflux is a real-time collaborative workspace where users create workspaces,
+invite team members, and collaboratively create and edit rich-text documents.
+Collaborators edit shared pages, see live cursors and presence, and synchronize
+document changes with Yjs over WebSockets. The product includes workspace and
+member management, role-based permissions, threaded comments, document
+persistence, version history, and document restoration.
 
 ---
 
@@ -97,7 +106,7 @@ Stores historical document states.
 - anchor stores the location of the comment in the document.
 
 ### Important Database Notes
-- Store Yjs updates as binary data, not plain text.
+- Store Yjs updates in binary form.
 - Persist document updates incrementally instead of rewriting the entire document on every keystroke.
 - Create snapshots periodically. Restoring a snapshot replaces the current document state.
 - Use database transactions when restoring document versions.
@@ -182,7 +191,8 @@ On connection:
 
 ### Core Yjs Synchronization Protocol
 
-These are protocol messages handled by Yjs/y-websocket, not custom JSON API events.
+These protocol messages are handled by Yjs/y-websocket and define the document
+collaboration protocol.
 
 - `SYNC_STEP_1` - Client requests document synchronization using its state vector.
 - `SYNC_STEP_2` - Server responds with missing document state.
@@ -241,29 +251,28 @@ These are optional custom events for application features beyond Yjs synchroniza
 | Frontend | Next.js + TypeScript |
 | Editor | ProseMirror |
 | Collaboration Engine | Yjs |
-| Real-Time Communication | WebSockets + y-websocket |
+| Real-Time Communication | WebSockets + Yjs sync protocol |
 | Backend APIs | Next.js Route Handlers |
-| Collaboration Server | Node.js |
+| Collaboration Server | Bun (`apps/ws`) |
 | Database | PostgreSQL |
 | ORM | Prisma |
-| Cross-instance Messaging | Redis |
+| Cache and cross-process relay | Redis (optional) |
 | Authentication | Session/JWT-based authentication |
 
-### Suggested Monorepo Structure
+### Repository structure
 
 ```text
 conflux/
 ├── apps/
 │   ├── web/                  # Next.js application
-│   └── collaboration/        # WebSocket server
+│   └── ws/                   # Bun WebSocket collaboration service
 │
 ├── packages/
 │   ├── database/             # Prisma schema and client
-│   ├── shared/               # Shared types and utilities
-│   └── config/               # Shared configurations
+│   ├── seed/                  # Demo workspace fixtures
+│   └── config-eslint/        # Shared lint configuration
 │
-├── pnpm-workspace.yaml
-└── package.json
+└── package.json              # Bun workspace and task scripts
 ```
 
 ---
@@ -274,12 +283,11 @@ conflux/
 - Workspace owners can invite members and manage permissions.
 - Users can create and manage multiple documents.
 - Multiple users can edit the same document simultaneously.
-- Concurrent edits converge without losing changes.
+- Concurrent edits converge and preserve changes.
 - Live cursors and collaborator presence work correctly.
 - Document updates survive server restarts.
 - Disconnected clients can reconnect and synchronize changes.
 - Comments and threaded replies work.
 - Previous document versions can be restored.
-- Unauthorized users cannot read or modify restricted documents.
-- Multiple WebSocket instances can synchronize through Redis.
+- Restricted documents are accessible only to authorized users.
 

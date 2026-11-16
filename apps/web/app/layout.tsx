@@ -16,6 +16,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              '(function(){try{var m=window.matchMedia("(prefers-color-scheme: dark)");var apply=function(){var t=localStorage.getItem("conflux:theme")||"system";document.documentElement.dataset.theme=t==="dark"||(t==="system"&&m.matches)?"dark":"light"};apply();m.addEventListener("change",apply)}catch(e){}})()',
+          }}
+        />
+      </head>
       <body
         className={`${geist.variable} ${geistMono.variable} ${instrumentSerif.variable}`}
       >

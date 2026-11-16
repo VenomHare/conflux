@@ -1205,12 +1205,27 @@ button:active {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  width: 100%;
   margin-bottom: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 .workspace-invitations-heading h3 {
   margin: 0;
   font-size: 13px;
   font-weight: 550;
+}
+.workspace-invitations-chevron {
+  margin-left: auto;
+  color: var(--text-faint);
+  transition: transform 120ms ease-out;
+}
+.workspace-invitations-chevron.expanded {
+  transform: rotate(180deg);
 }
 .workspace-invitation-list {
   display: grid;
@@ -1593,6 +1608,11 @@ button:active {
 }
 .remote-cursor-selection {
   border-radius: 2px;
+  background-color: color-mix(
+    in srgb,
+    var(--remote-cursor-color) 20%,
+    transparent
+  );
 }
 .remote-cursor-caret {
   position: relative;

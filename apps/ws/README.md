@@ -1,9 +1,10 @@
 # Collaboration WebSocket service
 
-This Bun service hosts one in-memory Yjs room per active page, authenticates
-connections with the web app's signed WebSocket token, persists accepted Yjs
-updates to PostgreSQL, and relays document and awareness updates among clients
-connected to this process.
+This Bun service authenticates collaboration connections, hosts Yjs rooms for
+active pages, persists accepted document updates to PostgreSQL, and broadcasts
+document and awareness updates to connected clients. Redis optionally caches
+serialized documents and relays live updates between processes. PostgreSQL is
+the durable source of truth.
 
 ## Run locally
 
@@ -21,8 +22,12 @@ The dev script reads `../../.env` and listens on `PORT` (default `8008`). Set
 
 ## Deployment boundary
 
-Run exactly one persistent collaboration process. Room state is in memory;
-this service does not implement Redis Pub/Sub or cross-process room
-synchronization. PostgreSQL is the source of truth and Redis, when configured,
-is only a document cache. The package currently defines a development script;
-it has no separate production start or health-check command.
+Run one persistent WebSocket process for reliable collaboration. Each process
+keeps its active rooms in memory. With `REDIS_URL`, Redis Pub/Sub relays live
+document and awareness updates between processes, but messages are transient
+and simultaneous edits handled by different processes can trigger the stale
+room persistence check. PostgreSQL remains the durable source of truth.
+
+The package currently defines a development script, but no separate production
+start or health-check command. See the root [README](../../README.md) for the
+system overview, setup steps, and current limitations.

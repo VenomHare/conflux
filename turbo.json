@@ -28,8 +28,13 @@
       "cache": false
     },
     "db:seed": {
-      "dependsOn": ["generate"],
-      "env": ["DATABASE_URL"],
+      "dependsOn": ["^generate"],
+      "env": ["DATABASE_URL", "SEED_DEMO_PASSWORD"],
+      "cache": false
+    },
+    "db:seed:demo": {
+      "dependsOn": ["^generate"],
+      "env": ["DATABASE_URL", "SEED_DEMO_PASSWORD"],
       "cache": false
     },
     "dev": {

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   Check,
+  ChevronDown,
   Copy,
   Mail,
   Settings as SettingsIcon,
@@ -76,6 +77,7 @@ export function WorkspaceSettingsPage({
   const { workspace, setWorkspace, user } = useWorkspaceFrame();
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [invitationsOpen, setInvitationsOpen] = useState(false);
   const [loading, setLoading] = useState(section === "members");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -176,6 +178,7 @@ export function WorkspaceSettingsPage({
         result.invitation,
         ...current.filter((invitation) => invitation.id !== result.invitation.id),
       ]);
+      setInvitationsOpen(true);
       setInviteEmail("");
       setNotice(`Invitation ready for ${result.invitation.email}.`);
     } catch (reason) {
@@ -499,28 +502,40 @@ export function WorkspaceSettingsPage({
                   </button>
                 </form>
                 <div className="workspace-invitations">
-                  <div className="workspace-invitations-heading">
+                  <button
+                    className="workspace-invitations-heading"
+                    type="button"
+                    aria-expanded={invitationsOpen}
+                    onClick={() => setInvitationsOpen((open) => !open)}
+                  >
                     <h3>Pending invitations</h3>
                     <span className="member-count">{invitations.length}</span>
-                  </div>
-                  {invitations.length ? (
-                    <div className="workspace-invitation-list">
-                      {invitations.map((invitation) => (
-                        <div className="workspace-invitation" key={invitation.id}>
-                          <div className="workspace-invitation-meta">
-                            <strong>{invitation.email}</strong>
-                            <span>
-                              {roleLabels[invitation.role]} · Expires {formatInvitationDate(invitation.expires_at)}
-                            </span>
+                    <ChevronDown
+                      size={16}
+                      aria-hidden="true"
+                      className={`workspace-invitations-chevron${invitationsOpen ? " expanded" : ""}`}
+                    />
+                  </button>
+                  {invitationsOpen && (
+                    invitations.length ? (
+                      <div className="workspace-invitation-list">
+                        {invitations.map((invitation) => (
+                          <div className="workspace-invitation" key={invitation.id}>
+                            <div className="workspace-invitation-meta">
+                              <strong>{invitation.email}</strong>
+                              <span>
+                                {roleLabels[invitation.role]} · Expires {formatInvitationDate(invitation.expires_at)}
+                              </span>
+                            </div>
+                            <button className="secondary" type="button" onClick={() => void copyInvitation(invitation.token)}>
+                              <Copy size={14} /> Copy link
+                            </button>
                           </div>
-                          <button className="secondary" type="button" onClick={() => void copyInvitation(invitation.token)}>
-                            <Copy size={14} /> Copy link
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="muted">No pending invitations.</p>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="muted">No pending invitations.</p>
+                    )
                   )}
                 </div>
               </section>

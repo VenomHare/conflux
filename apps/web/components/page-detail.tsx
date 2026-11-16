@@ -70,7 +70,7 @@ function remotePresenceExtension(
                       Math.max(anchor, head),
                       {
                         class: "remote-cursor-selection",
-                        style: `background-color: ${color}30; --remote-cursor-color: ${color}`,
+                        style: `--remote-cursor-color: ${color}`,
                       },
                     ),
                   );

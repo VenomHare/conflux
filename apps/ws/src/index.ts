@@ -156,10 +156,16 @@ const ws = new WebSocketServer({
   perMessageDeflate: false,
 });
 const PAGE_DOCUMENT_CACHE_PREFIX = "conflux:ws:page:";
+const PAGE_ROOM_CHANNEL_PREFIX = "conflux:ws:room:";
 const redis = process.env.REDIS_URL
   ? new Bun.RedisClient(process.env.REDIS_URL)
   : null;
+const redisSubscriber = process.env.REDIS_URL
+  ? new Bun.RedisClient(process.env.REDIS_URL)
+  : null;
+const instanceId = crypto.randomUUID();
 let redisConnection: Promise<void> | null = null;
+let redisSubscriberConnection: Promise<void> | null = null;
 
 async function getRedis() {
   if (!redis) return null;
@@ -171,6 +177,78 @@ async function getRedis() {
   }
   await redisConnection;
   return redis;
+}
+
+async function subscribeToRoom(pageId: string, room: Room) {
+  if (!redisSubscriber || !process.env.REDIS_URL) return;
+  try {
+    if (!redisSubscriberConnection) {
+      redisSubscriberConnection = redisSubscriber
+        .connect()
+        .catch((error: unknown) => {
+          redisSubscriberConnection = null;
+          throw error;
+        });
+    }
+    await redisSubscriberConnection;
+    await redisSubscriber.subscribe(
+      `${PAGE_ROOM_CHANNEL_PREFIX}${pageId}`,
+      (message) => {
+        try {
+          const event: unknown = JSON.parse(message);
+          if (
+            typeof event !== "object" ||
+            event === null ||
+            !("instanceId" in event) ||
+            event.instanceId === instanceId ||
+            !("kind" in event) ||
+            !("state" in event) ||
+            typeof event.state !== "string"
+          )
+            return;
+          const update = Buffer.from(event.state, "base64");
+          if (event.kind === "update") {
+            Y.applyUpdate(room.doc, update);
+            Y.applyUpdate(room.persistedDoc, update);
+            if ("updatedAt" in event && typeof event.updatedAt === "string")
+              room.updatedAt = event.updatedAt;
+            const encoder = encoding.createEncoder();
+            encoding.writeVarUint(encoder, 0);
+            syncProtocol.writeUpdate(encoder, update);
+            const frame = encoding.toUint8Array(encoder);
+            for (const client of room.clients) {
+              if (client.readyState === WebSocket.OPEN) client.send(frame);
+            }
+          } else if (event.kind === "awareness") {
+            awarenessProtocol.applyAwarenessUpdate(
+              room.awareness,
+              update,
+              "redis",
+            );
+          }
+        } catch (error) {
+          console.error(
+            `[redis] invalid room event page=${pageId}: ${String(error)}`,
+          );
+        }
+      },
+    );
+  } catch (error) {
+    console.error(`[redis] room subscription failed page=${pageId}: ${String(error)}`);
+  }
+}
+
+async function publishRoomEvent(pageId: string, event: Record<string, unknown>) {
+  try {
+    const client = await getRedis();
+    if (!client) return;
+    await client.publish(
+      `${PAGE_ROOM_CHANNEL_PREFIX}${pageId}`,
+      JSON.stringify({ ...event, instanceId }),
+    );
+  } catch (error) {
+    console.error(`[redis] room publish failed page=${pageId}: ${String(error)}`);
+  }
 }
 
 function pageDocumentCacheKey(pageId: string) {
@@ -331,6 +409,14 @@ async function loadRoom(pageId: string): Promise<Room | null> {
         awarenessProtocol.encodeAwarenessUpdate(room.awareness, changed),
       );
       const message = encoding.toUint8Array(encoder);
+      if (origin !== "redis") {
+        void publishRoomEvent(pageId, {
+          kind: "awareness",
+          state: Buffer.from(
+            awarenessProtocol.encodeAwarenessUpdate(room.awareness, changed),
+          ).toString("base64"),
+        });
+      }
       for (const client of room.clients) {
         if (
           client !== origin &&
@@ -342,6 +428,7 @@ async function loadRoom(pageId: string): Promise<Room | null> {
     },
   );
   Y.applyUpdate(room.persistedDoc, Y.encodeStateAsUpdate(doc));
+  await subscribeToRoom(pageId, room);
   console.log(
     `[restore] room loaded page=${pageId} updatedAt=${room.updatedAt} stateVectorBytes=${Y.encodeStateVector(doc).byteLength} paragraphs=${doc.getXmlFragment("default").length}`,
   );
@@ -430,6 +517,11 @@ async function persistRoomChanges(pageId: string, room: Room) {
     Y.applyUpdate(room.persistedDoc, pendingUpdate);
     room.updatedAt = persistedAt;
     await cacheDocument(pageId, room.updatedAt, room.persistedDoc);
+    await publishRoomEvent(pageId, {
+      kind: "update",
+      state: Buffer.from(pendingUpdate).toString("base64"),
+      updatedAt: room.updatedAt,
+    });
     console.log(
       `[persistence] update committed page=${pageId} bytes=${pendingUpdate.byteLength} updatedAt=${persistedAt}`,
     );

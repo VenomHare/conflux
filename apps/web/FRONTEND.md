@@ -9,8 +9,8 @@ Audience: the coding agent implementing `apps/web` (Next.js + TypeScript). All p
 Conflux = **Notion's calm, content-first canvas + Google Docs' familiarity and discoverability.**
 
 - **Calm canvas:** the document is the hero. Chrome (sidebar, top bar, toolbar) is quiet, low-contrast, and gets out of the way. No heavy borders, no shadows except on floating layers (menus, dialogs).
-- **Docs-like discoverability:** a slim fixed formatting toolbar, familiar shortcuts, a visible Share button, comments in the right margin, a clear version history.
-- **Notion-like speed:** slash menu (`/`) for inserting blocks, `⌘K` quick switcher, inline-editable title, flat sidebar page list with hover actions.
+- **Docs-like discoverability:** a slim formatting toolbar, familiar shortcuts, comments in the side panel, and clear version history.
+- **Notion-like speed:** `⌘K` quick switcher, inline-editable title, flat sidebar page list with hover actions.
 - **Simple by default:** one obvious action per screen. Never more than one primary button visible. No settings the MVP does not need.
 - **Trust signals:** always show save/sync state, who is here, and what role the current user has.
 - **Motion:** subtle only (120–180ms ease-out). Respect `prefers-reduced-motion`.
@@ -22,25 +22,25 @@ Conflux = **Notion's calm, content-first canvas + Google Docs' familiarity and d
 | Concern | Choice |
 |---|---|
 | Framework | Next.js (App Router), TypeScript strict |
-| Styling | Tailwind CSS + CSS variables for tokens |
-| Components | shadcn/ui (Radix primitives) — Dialog, DropdownMenu, Popover, Tooltip, Tabs, Select, Avatar, Command, Sheet, Skeleton, Toast (Sonner) |
+| Styling | Global CSS with CSS variables for tokens |
+| Components | React components styled with the app's shared CSS patterns |
 | Icons | lucide-react |
 | Fonts | Via `next/font/google`: **Geist** (UI and editor body, variable weight), **Instrument Serif** (page title and Workspace home heading only), **Geist Mono** (code). Expose as CSS variables `--font-sans`, `--font-serif`, `--font-mono`. Fallbacks: `ui-sans-serif, system-ui, sans-serif` / `ui-serif, Georgia, serif` / `ui-monospace, SFMono-Regular, monospace`. Set `-webkit-font-smoothing: antialiased` and `text-rendering: optimizeLegibility` on `body`. |
-| Editor | **Tiptap** (ProseMirror-based) with `@tiptap/extension-collaboration`, `@tiptap/extension-collaboration-cursor` (or `-caret`), `y-prosemirror` |
-| Realtime | `yjs`, `y-websocket` (`WebsocketProvider`), `y-indexeddb` (offline cache, P1) |
-| Server state | TanStack Query |
-| UI state | Zustand (small: sidebar open, panel open, quick switcher) |
-| Forms | react-hook-form + zod |
-| Theme | next-themes (light / dark / system) |
-| Dates | date-fns |
+| Editor | **Tiptap** (ProseMirror-based) with `@tiptap/extension-collaboration` and `@tiptap/y-tiptap` |
+| Realtime | `yjs`, `y-websocket` (`WebsocketProvider`) |
+| Server state | API client and React state |
+| UI state | React Context for workspace-scoped shared state; component state for local UI |
+| Forms | Native React forms + zod validation |
+| Theme | CSS variables and persisted local preference (light / dark / system) |
+| Dates | `Intl.DateTimeFormat` |
 
-Types shared with backend come from `packages/shared`. Do not redefine DTOs locally.
+Keep API types close to their consuming feature and align them with the route contracts.
 
 ---
 
 ## 3. Design tokens
 
-Define as CSS variables in `globals.css`, mapped into the Tailwind config. Provide light and dark values.
+Define as CSS variables in `globals.css`. Provide light and dark values.
 
 ### Colors (light)
 - `--bg`: `#FFFFFF` — app and editor background
@@ -54,13 +54,11 @@ Define as CSS variables in `globals.css`, mapped into the Tailwind config. Provi
 - `--accent-hover`: `#4338CA`
 - `--accent-subtle`: `#EEF0FF`
 - `--danger`: `#DC2626`, `--success`: `#16A34A`, `--warning`: `#D97706`
-- `--comment-highlight`: `#FFF3C4` (inactive), `#FFE58A` (active/selected thread)
 
 ### Colors (dark)
 - `--bg`: `#191919`, `--bg-subtle`: `#202020`, `--bg-muted`: `#2A2A2A`, `--border`: `#2F2F2F`
 - `--text`: `#ECECEA`, `--text-muted`: `#A3A39E`, `--text-faint`: `#75756F`
 - `--accent`: `#818CF8`, `--accent-subtle`: `#262846`
-- `--comment-highlight`: `#4A3F12`, active `#6B5A14`
 
 ### Collaborator colors (cursors and avatars)
 Deterministic palette of 8, assigned by hash of `userId`:
@@ -76,7 +74,7 @@ Deterministic palette of 8, assigned by hash of `userId`:
 ### Elevation (shadows)
 Only floating layers get a shadow. Light theme values (dark theme: same offsets, black at 40–55% opacity, plus a 1px inner border `rgba(255,255,255,0.06)`):
 - `--shadow-xs`: `0 1px 2px rgba(15,15,15,0.05)` — secondary buttons, inputs
-- `--shadow-md`: `0 4px 12px rgba(15,15,15,0.08), 0 0 0 1px rgba(15,15,15,0.06)` — dropdowns, popovers, tooltips, slash menu
+- `--shadow-md`: `0 4px 12px rgba(15,15,15,0.08), 0 0 0 1px rgba(15,15,15,0.06)` — dropdowns, popovers, tooltips
 - `--shadow-lg`: `0 16px 40px rgba(15,15,15,0.14), 0 0 0 1px rgba(15,15,15,0.06)` — dialogs, quick switcher
 
 ### Typography
@@ -101,12 +99,12 @@ Instrument Serif only ships weight 400. Never apply bold to it (set `font-synthe
 
 ### Layout and shape
 - Radius scale: `--radius-sm` 4px (small icon buttons, kbd chips, inline code), `--radius-md` 6px (sidebar rows, toolbar buttons, menu items), `--radius-lg` 8px (inputs, buttons, dropdown/popover containers), `--radius-xl` 12px (dialogs, cards, quick switcher). Avatars are fully round except workspace avatars (radius 6px).
-- Spacing scale: Tailwind default (4px grid). Never use odd values like 5px or 7px.
+- Spacing scale: prefer a 4px grid for consistent layouts.
 - Sidebar width **264px** (collapsible to 0). Comments/History panel width 340px. Editor content max-width 720px, centered, horizontal padding 24px (48px ≥ md).
 - Focus: 2px ring in `--accent`, offset 2px, always visible for keyboard users (use `:focus-visible`, not `:focus`). Inside tight containers (sidebar rows, toolbar) use an **inset** 2px ring instead so it is never clipped.
 
 ### Base component specs
-Build these once as the shadcn primitives (edit the generated files to match) so every screen inherits them.
+Use the shared CSS patterns for buttons, fields, dialogs, and other repeated controls.
 
 **Button** — font 14/500, radius 8px, no uppercase, icon 16px with 8px gap, transitions `background-color, border-color, box-shadow` 120ms ease-out. Sizes: `sm` height 28 / padding 0 10; `md` (default) height 32 / padding 0 12; `lg` height 40 / padding 0 16 (auth forms and onboarding only).
 - *Primary:* bg `--accent`, text white; hover `--accent-hover`; pressed: add `inset 0 1px 2px rgba(0,0,0,0.15)`; disabled opacity 0.5.
@@ -122,7 +120,7 @@ Build these once as the shadcn primitives (edit the generated files to match) so
 
 **Tooltip** — bg `--text` (inverted), text `--bg`, 12/16 weight 500, padding 4px 8px, radius 6px, `--shadow-md`, max-width 240px. Delay 400ms open, 0ms when moving between tooltips. Shortcuts shown as a trailing `Kbd` chip at 70% opacity. Never put essential information only in a tooltip.
 
-**Dialog** — overlay `--overlay` with `backdrop-filter: blur(2px)`; panel bg `--bg`, radius 12px, `--shadow-lg`, width 440px (480px for Share, 560px for Profile), max-width calc(100vw - 32px), padding 24px. Title 18/600 (Geist), description 14px `--text-muted` below with 4px gap, 20px gap before content, footer buttons right-aligned with 8px gap and 24px gap above. Close "x" icon button (28px) at top-right 12px/12px. Enter animation: 160ms fade + scale 0.97 → 1. On mobile (< 640px) dialogs become bottom sheets with radius 16px top corners.
+**Dialog** — overlay `--overlay` with `backdrop-filter: blur(2px)`; panel bg `--bg`, radius 12px, `--shadow-lg`, width 440px, max-width calc(100vw - 32px), padding 24px. Title 18/600 (Geist), description 14px `--text-muted` below with 4px gap, footer buttons right-aligned with 8px gap. On mobile (< 640px) dialogs become bottom sheets with radius 16px top corners.
 
 **Avatar** — sizes 20, 24, 28, 32, 40 (round). Image fills; fallback shows 1–2 uppercase initials in Geist 500, font-size = 42% of the avatar size, white text on a background color picked from the collaborator palette by hash of `userId` (so a user has the same color everywhere). Workspace avatar: same, radius 6px (radius 5px at size 20), initial is one letter.
 
@@ -130,7 +128,7 @@ Build these once as the shadcn primitives (edit the generated files to match) so
 
 **Kbd chip** — height 18px, min-width 18px, padding 0 4px, radius 4px, 1px `--border`, bg `--bg`, Geist Mono 11/500 `--text-muted`. Show `⌘` on macOS and `Ctrl` elsewhere (detect via `navigator.platform`).
 
-**Toast (Sonner)** — bottom-center, width 360px, bg `--bg`, 1px `--border`, `--shadow-md`, radius 10px, padding 12px 14px, title 14/500, description 13 `--text-muted`, 16px leading status icon, auto-dismiss 4s (6s for errors, with a close button). Max 3 stacked.
+**Status feedback** — use the existing inline status and error styles near the action that produced them.
 
 **Skeleton** — bg `--bg-muted`, radius 6px, shimmer: a linear-gradient highlight (`--hover` → transparent) sweeping left→right over 1.4s, infinite; disabled under `prefers-reduced-motion` (static fill).
 
@@ -145,7 +143,7 @@ app/
 ├── (auth)/
 │   ├── login/page.tsx
 │   └── register/page.tsx
-├── invite/[token]/page.tsx              # public-ish: works logged-in or out
+├── invite/[token]/page.tsx              # signed-in invited recipient
 ├── (app)/                               # requires auth; wraps with AppShell
 │   ├── page.tsx                         # redirect logic (see below)
 │   ├── onboarding/page.tsx              # create first workspace
@@ -153,11 +151,12 @@ app/
 │       ├── layout.tsx                   # sidebar + workspace context
 │       ├── page.tsx                     # workspace home (page list)
 │       ├── p/[pageId]/page.tsx          # editor page
+│       ├── invitations/page.tsx         # invitations sent to the current user
 │       └── settings/
 │           ├── page.tsx                 # General
 │           └── members/page.tsx         # Members & invitations
 ├── not-found.tsx
-└── layout.tsx                           # providers: Query, Theme, Toaster
+└── layout.tsx                           # global fonts, styles, and app metadata
 ```
 
 **Root redirect (`/`):** unauthenticated → `/login`. Authenticated with 0 workspaces → `/onboarding`. Otherwise → last visited workspace (stored in `localStorage` key `conflux:lastWorkspace`), falling back to the first workspace returned.
@@ -255,8 +254,8 @@ One component, used everywhere, so spacing is identical.
   1. Overline "Workspaces".
   2. One item per workspace (height 36px): `WorkspaceAvatar` 20px, name 14px truncated, then on the right a 12px `--text-faint` role label (e.g. "Admin") and a `check` icon 16px `--accent` on the current workspace only. Max height 6 items (216px) before the list scrolls. Selecting navigates to `/w/:id`.
   3. Separator.
-  4. "Create workspace" (`plus` icon) — opens a Dialog with the onboarding form (name + optional description).
-  5. "Invite members" (`user-plus` icon, Admin+) — opens the Share dialog's invite section.
+  4. "Create workspace" (`plus` icon) — navigates to onboarding.
+  5. "Invite members" (`user-plus` icon, Admin+) — opens workspace member settings.
   6. "Workspace settings" (`settings` icon, Admin+) — navigates to settings.
 
 #### 6.2.4 Zone B — Primary nav (padding `4px 8px 8px`)
@@ -275,7 +274,7 @@ Two `SidebarRow`s:
 - Leading icon: `file-text` 16px (same icon for every page in MVP; no emoji picker).
 - Title: 14/20, truncated. Empty title shows "Untitled" in `--text-faint`.
 - **Trailing `⋯` button:** icon button 24px, radius 4px, `ellipsis` icon 14px, positioned at the right inside the row (right padding 4px). Hidden by default; shown on row hover, `:focus-within`, or while its menu is open. A 24px gradient fade (row-bg → transparent) sits left of the button so the title never collides with it. Hidden for Viewer/Commenter except "Copy link" (so for them the button shows only that item; if only one item, the button is omitted and Copy link is available via right-click).
-- **Menu** (same for the `⋯` button and right-click via Radix ContextMenu): "Open in new tab" (`external-link`), "Copy link" (`link`), "Rename" (`pencil`, Editor+, shortcut `F2`), separator, "Delete" (`trash-2`, Editor+, destructive style).
+- **Menu** (opened from the `⋯` button): "Open in new tab" (`external-link`), "Copy link" (`link`), "Rename" (`pencil`, Editor+, shortcut `F2`), separator, "Delete" (`trash-2`, Editor+, destructive style).
 - **Inline rename:** the row's label becomes an input (same font/size, bg `--bg`, 1px `--accent` border with 3px `--ring-soft` halo, radius 6px, text fully selected). Enter or blur saves (`PATCH`, optimistic); Esc cancels. Empty value saves as empty title ("Untitled").
 - **Delete:** opens `ConfirmDialog` ("Delete "{title}"?", body "This page and its comments and version history will be permanently deleted.", danger button "Delete page"). If the deleted page is open, navigate to the next page in the list, or workspace home if none.
 - **Ordering:** sorted by `created_at` **descending** (newest first) and **never re-sorted live**. (Sorting by `updated_at` would make rows jump while someone types a title. The Workspace home cards, in contrast, sort by `updated_at`.)
@@ -302,9 +301,9 @@ Two `SidebarRow`s:
 - **Menu** (opens upward, align start, width 248px):
   1. Non-interactive header block (padding 8px, gap 10px): `UserAvatar` 32px, name 14/500, email 13 `--text-muted` (truncated).
   2. Separator.
-  3. "Profile" (`user`) — opens the Profile dialog.
-  4. **Theme row** (not a menu item; custom row, height 36px, padding `0 8px`): label "Theme" 14px on the left, and on the right a segmented control of three 28px icon buttons (`sun`, `moon`, `monitor`) inside a pill (bg `--bg-muted`, radius 8px, padding 2px); the selected option has bg `--bg`, `--shadow-xs`, radius 6px. Selecting does not close the menu.
-  5. "Keyboard shortcuts" (`keyboard`, shortcut chip `⌘/`).
+  3. "Profile" (`user`) — opens profile settings.
+  4. "Pending invitations" (`mail`) opens workspace member settings. Show a notification dot only when invitations are pending.
+  5. **Theme row** (not a menu item, height 36px): label "Theme" and a segmented control of three 28px icon buttons (`sun`, `moon`, `monitor`). Selecting does not close the menu.
   6. Separator.
   7. "Log out" (`log-out`).
 
@@ -332,7 +331,6 @@ Left → right:
 - **Sync status** (see 8.6), then 8px gap.
 - **Comments button:** icon button 32px, `message-square` icon 18px. When there are open threads, a 16px-high badge (accent bg, white text 11/600, radius 8px, min-width 16px) overlaps the top-right of the icon. Active (panel open) state: bg `--bg-muted`.
 - **History button:** icon button 32px, `history` icon 18px, same active state.
-- **Share button:** Primary `md` button, label "Share", leading `users` icon 16px. 8px left margin.
 - **`⋯` menu button:** icon button 32px, `ellipsis` icon 18px. Items: "Copy link" (`link`), "Save version" (`bookmark`, Editor+), separator, "Delete page" (`trash-2`, Editor+, destructive).
 
 On non-editor pages (home, settings) the top bar shows only the sidebar toggle (when collapsed) and the breadcrumb (e.g. `Workspace name / Settings`).
@@ -345,7 +343,7 @@ On non-editor pages (home, settings) the top bar shows only the sidebar toggle (
 - Tablet (768–1023): sidebar is a drawer; panels are overlay drawers from the right.
 
 ### 6.5 Quick switcher (⌘K / Ctrl+K)
-shadcn `Command` dialog. Input "Search pages…". Lists pages of the current workspace filtered client-side by title (fuzzy: simple case-insensitive includes). Also contains actions: "New page" (Editor+), "Go to members", "Toggle theme". Enter navigates. Esc closes.
+Custom dialog. Input "Search pages…". Lists pages of the current workspace filtered client-side by title (simple case-insensitive includes). Enter navigates. Esc closes.
 
 ---
 
@@ -368,21 +366,14 @@ shadcn `Command` dialog. Input "Search pages…". Lists pages of the current wor
 
 ### 7.4 `/invite/[token]`
 - Fetch `GET /invitations/:token`.
-- **Current backend limitation:** the endpoint requires the recipient to be
-  signed in with the invited email. Logged-out visitors currently see an
-  unavailable invitation state; the login/register handoff described below is
-  not implemented yet. The endpoint also does not return an inviter name.
-- **Desired flow after those backend gaps are addressed:**
-  - **Valid, logged in as matching email:** card "You've been invited to **{workspace}** as **{role}** by {inviter}". Button "Accept invitation" → `POST /invitations/:token/accept` → redirect to `/w/:id`.
-  - **Valid, logged out:** same card, with buttons "Log in" and "Create account" (both carry `next=/invite/:token`). Pre-fill email on register if the invitation email is known.
-  - **Logged in with a different email:** warning "This invitation was sent to {email}. You're signed in as {current}." Buttons: "Log out and switch account".
-  - **Expired / revoked / already accepted / not found:** friendly error card with icon, explanation, and "Go to Conflux" button.
+- The recipient must be signed in with the invited email. A usable invitation shows the workspace, role, and an "Accept invitation" button. On acceptance, redirect to `/w/:id`.
+- Expired, revoked, accepted, and mismatched invitations show an unavailable state.
 
 ### 7.5 `/w/[workspaceId]` — Workspace home
 - Heading: workspace name in Instrument Serif 40/1.1 (see Typography), description below in 14px `--text-muted` with 8px gap. Content column max-width 960px, centered, top padding 64px.
 - Section "Pages": responsive card grid (1/2/3 columns). Each card: title, "Edited {relative time} · by {name}" is NOT available in the data model, so show only "Edited {relative time}". Card click opens the page.
-- First card is "+ New page" (Editor+).
-- Empty state: illustration-free, an icon, "No pages yet", subtext "Create your first page to start writing together.", primary button "New page" (hidden for Viewer/Commenter, who see "No pages yet" only).
+- A "New page" button appears beside the Pages heading for Editor+.
+- Empty state: illustration-free, an icon, "No pages yet", and subtext "Create your first page to start writing together." The heading button remains available for Editor+.
 - Loading: 6 skeleton cards.
 
 ### 7.6 `/w/[workspaceId]/p/[pageId]` — Editor page (the core screen)
@@ -396,12 +387,15 @@ See Sections 8–11 in detail.
 Tabs shown at the top of both settings pages: **General | Members**.
 - **Invite form** (Admin+): email input + role select (Admin, Editor, Commenter, Viewer) + "Send invite" button. On success: toast "Invitation sent" and show the invite link with a Copy button (email delivery may not exist in MVP, so always show the copyable link `${origin}/invite/${token}`).
 - **Members table**: avatar, name, email, role (select for Admin+, plain text otherwise), joined date, `⋯` (Remove member). Owner row has no menu and a fixed "Owner" badge. A user can't change their own role. Role change is optimistic with rollback on error. Remove opens a confirm dialog.
-- **Pending invitations** list (see backend gaps): email, role, expires in, `Copy link`, `Revoke`.
+- **Pending invitations** collapsible list for Admin+: recipient email, role, expiry date, and a `Copy link` button. The full URL is copied without displaying it. Expand the list after creating an invitation so the new invite is visible.
 
 ### 7.9 `/w/[workspaceId]/settings/profile` — Profile
 Linked from the sidebar and user menu. Keep the page in the same restrained settings style. Include a profile photo upload (PNG, JPEG, WebP, or AVIF, up to 5 MB) stored in Cloudflare R2, editable name, and read-only email. Save profile details with `PATCH /users/me`.
 
-### 7.10 Global states
+### 7.10 `/w/[workspaceId]/invitations` — Pending invitations
+Linked from the account menu. List usable invitations addressed to the signed-in user, with a link to review and accept each invite.
+
+### 7.11 Global states
 - `not-found.tsx`: "We couldn't find that page" + button back home.
 - Forbidden (403 on a page/workspace): "You don't have access to this page" + button to the workspace home, + "Request access" is NOT in MVP.
 - Generic error boundary: "Something went wrong" with Retry button.
@@ -444,38 +438,35 @@ Every button has a tooltip with its name and shortcut.
 - Active-block hint: when the caret is in an empty paragraph, show the placeholder (see 8.3); no left-hand drag handles or "+" gutter buttons in MVP.
 
 ### 8.3 Editor extensions (MVP set — no more)
-Paragraph, Heading (1–3), Bold, Italic, Underline, Strike, Code, CodeBlock (no syntax highlighting in MVP), BulletList, OrderedList, TaskList/TaskItem, Blockquote, HorizontalRule, Link, Placeholder, Collaboration (Yjs fragment name `"default"`), CollaborationCursor, Dropcursor, Gapcursor, **CommentHighlight** (custom decoration extension, see Section 9), and **SlashCommand** (custom, below). **Disable Tiptap's own History extension** (Yjs undo manager handles undo/redo via the Collaboration extension). No images, tables, embeds or mentions in MVP.
+Paragraph, Heading (1–3), Bold, Italic, Underline, Strike, Code, CodeBlock (no syntax highlighting in MVP), BulletList, OrderedList, TaskList/TaskItem, Blockquote, HorizontalRule, Link, Placeholder, Collaboration (Yjs fragment name `"default"`), CollaborationCursor, Dropcursor, and Gapcursor. **Disable Tiptap's own History extension** (Yjs undo manager handles undo/redo via the Collaboration extension). No images, tables, embeds or mentions in MVP.
 
-**Placeholder:** empty first paragraph shows "Type '/' for commands, or just start writing…". Empty headings show "Heading".
+**Placeholder:** empty first paragraph shows "Start writing…". Empty headings show "Heading".
 
 **Keyboard shortcuts:** standard Tiptap/Docs set — `⌘B/I/U`, `⌘⇧X` strike, `⌘E` inline code, `⌘⌥1/2/3` headings, `⌘⇧7/8/9` lists, `⌘K` is reserved for the quick switcher so link is `⌘⇧K`... and markdown shortcuts (`# `, `- `, `1. `, `[] `, `> `, ``` ``` ```) enabled.
 
-### 8.4 Slash menu
-Typing `/` at the start of an empty block (or after a space) opens a floating menu at the caret, filtered as the user types. Menu spec: Dropdown container style from Section 3, width 280px, max-height 320px (scrolls), padding 4px, opens 6px below the caret (flips above if no room). Each item: height 48px, radius 6px, padding `0 8px`, gap 10px; leading 32×32 icon tile (bg `--bg-subtle`, 1px `--border`, radius 6px, lucide icon 16px `--text-muted`); two-line text: title 14/500 `--text`, description 12 `--text-faint`. Highlighted item bg `--hover` (keyboard and mouse share one highlight). Items (icon + title + one-line description): Text, Heading 1, Heading 2, Heading 3, Bullet list, Numbered list, Task list, Quote, Code block, Divider. Arrow keys / Enter select, Esc closes. Max 8 visible with scroll. "No results" row if none match. Hidden for read-only roles.
-
-### 8.5 Presence (top bar) and live cursors
+### 8.4 Presence (top bar) and live cursors
 - **Awareness state** (set via `provider.awareness.setLocalStateField("user", …)`) exactly per the backend spec: `userId, name, avatarUrl, color, cursor, selection, onlineStatus`. The Collaboration cursor extension handles `cursor/selection`; also set `name` and `color`.
 - **Remote cursors:** 2px caret in the user's color, with a small name label (12px, white text on the user's color, radius 4px) above the caret. The label shows on cursor movement and fades after 2.5s of inactivity; it reappears on hover. Remote selections render as 20%-opacity fill of the user's color.
 - **Presence avatars:** stacked circles (24px, overlapping −6px) with initials or `avatarUrl`, ring in the user's color. Show up to 4, then a "+N" chip; clicking opens a popover listing all online users (name + "You" tag + color dot). Deduplicate by `userId` (same user in two tabs = one avatar). Tooltip shows the name. Clicking an avatar in the popover scrolls to that user's cursor (P1).
 - A subtle toast is NOT shown on join/leave. Avatars appear/disappear with a 150ms fade.
 
-### 8.6 Sync status indicator (top bar)
+### 8.5 Sync status indicator (top bar)
 Small text + icon, muted, with tooltip. States driven by the `WebsocketProvider` events and doc updates:
 - **Saved** (check icon): connected, no pending local changes.
 - **Saving…** (spinner): connected and local updates not yet acknowledged (use a 400ms minimum display so it doesn't flicker).
 - **Connecting…** (spinner): initial connect or reconnecting.
-- **Offline — changes will sync when you're back** (cloud-off icon, `--warning`): disconnected. When offline, the editor stays editable (changes are buffered in the Yjs doc and in IndexedDB if enabled).
+- **Offline** (cloud-off icon, `--warning`): disconnected. The editor remains editable while its in-memory Yjs document is available; unsynced changes are not persisted across reloads.
 - **View only** (eye icon badge) for Viewer/Commenter instead of the above, still showing Offline if disconnected.
 
 On reconnect, show nothing extra; the indicator returns to "Saved".
 
-### 8.7 Permissions inside the editor
+### 8.6 Permissions inside the editor
 - Viewer/Commenter: `editor.setEditable(false)`; the cursor/selection still works for reading and for starting comments.
 - Handle the WS `PERMISSION_CHANGED` event: refetch workspace/member data; apply the new role immediately (toggle editability and toolbar), show a toast "Your role was changed to {role}". If access is lost entirely, redirect to the workspace home with a toast.
 - **Current backend limitation:** the collaboration service does not emit `PERMISSION_CHANGED`; it rechecks membership and role on open sockets every 15 seconds. Removal closes the socket, while a downgrade blocks document writes after the next check.
 - Handle WS auth failure/close code 4401/4403: show a full-page "You no longer have access" or redirect to login for 401.
 
-### 8.8 Loading and error behavior for the editor
+### 8.7 Loading and error behavior for the editor
 - Until the first Yjs sync completes (`provider.on("sync", true)`): show the title immediately (from `GET /pages/:id`) and a skeleton of 4 text lines under it. Don't render an editable editor before sync to avoid duplicate initial content.
 - If the page is soft-deleted or missing: Not-found state.
 - If the WS can't connect after 10s: show an inline banner "Having trouble connecting. Retrying…" above the editor (not blocking).
@@ -485,47 +476,28 @@ On reconnect, show nothing extra; the indicator returns to "Saved".
 ## 9. Comments
 
 ### 9.1 Anchoring (decision)
-Comments are anchored with **Yjs relative positions**, not marks inside the document (so Commenters, who cannot edit the document, can still add comments, and anchors survive concurrent edits). `anchor` JSON shape stored with each root comment:
+Comments store the selected text and its document offsets in the `anchor` JSON field. Replies store `anchor: {}`. Offsets can become stale after document edits; quoted text remains available as context.
 
 ```ts
-type CommentAnchor = {
-  type: "range";
-  from: unknown; // Y.relativePositionToJSON(...) of selection start
-  to: unknown;   // Y.relativePositionToJSON(...) of selection end
-  quotedText: string; // up to 200 chars, for display and as fallback
-};
+type CommentAnchor = { from?: number; to?: number; quotedText?: string };
 ```
-Use `absolutePositionToRelativePosition` / `relativePositionToAbsolutePosition` from `y-prosemirror` with the editor's `ySyncPluginKey` state. Replies (comments with `parent_id`) store `anchor: {}`.
 
-If an anchor can no longer be resolved (text deleted), the thread is shown as **"Original text was deleted"** in the panel using `quotedText` with strikethrough, with no highlight in the editor.
 
-### 9.2 Highlighting
-`CommentHighlight` is a ProseMirror decoration plugin that takes the list of unresolved root comments, resolves positions, and applies an inline decoration with `--comment-highlight` background and a 2px bottom border. The active thread uses the stronger highlight. Clicking a highlight opens the Comments panel and focuses that thread. Resolved threads are not highlighted.
+### 9.2 Creating a comment
+Use the Comments control to open the side panel and enter a comment in the composer. When text is selected, its quote and offsets are attached to the new comment. Posts with `POST /pages/:pageId/comments`.
 
-### 9.3 Creating a comment
-1. User selects text → a small floating **"Comment"** button appears near the selection end (and the toolbar button enables).
-2. Click → opens the Comments panel (if closed) with a new-thread composer at the top, showing the quoted text in a muted block and a textarea (autofocus). The selection stays visibly highlighted using a temporary decoration.
-3. `Enter` to send (`Shift+Enter` newline), or "Comment" button; "Cancel" discards. Posts with `POST /pages/:pageId/comments`.
-
-### 9.4 Comments panel (right side, 340px)
+### 9.3 Comments panel (right side, 340px)
 - Header: "Comments", tabs **Open | Resolved**, close button.
 - Thread card: quoted text (2-line clamp, left accent border), then comments in order: avatar, name, relative time ("2h ago", tooltip with full date), content. Content rendered as plain text with auto-linked URLs and preserved line breaks (no markdown in MVP).
 - Under the last comment: inline reply input "Reply…" (Commenter+). Expands on focus with Send/Cancel.
 - Thread actions (`⋯` on the root and on each comment where permitted): Edit (own), Delete (own, or Admin+), Resolve thread / Reopen thread (Commenter+; "Resolve" also shown as a check icon button on hover of the card). Edited comments show "(edited)" when `updated_at > created_at`.
 - Delete of a root comment with replies: confirm dialog "Delete this thread and its replies?".
-- Thread ordering: by the anchor's position in the document (top to bottom) for Open; by `resolved_at` desc for Resolved. Fallback by `created_at` if position unresolved.
-- Hovering a thread card scrolls/pulses the matching highlight; clicking a card scrolls the editor to it.
-- Empty state: "No comments yet. Select some text and click Comment."
+- Open and resolved threads are separated by tabs.
+- Empty state: "No comments yet."
 - Count badge on the top-bar Comments button = number of open threads.
 
-### 9.5 Realtime
-On receiving `COMMENT_CREATED / UPDATED / RESOLVED` WS events, invalidate the comments query (TanStack Query) rather than hand-merging. Show a brief 1s background flash on the newly arrived card. Mutations are optimistic for resolve/reopen; creation shows a pending state on the card.
-
-If the optional app-level WS events are not wired up by the backend, fall back to polling `GET /pages/:id/comments` every 10s while the panel is open or any highlight is rendered (feature flag `NEXT_PUBLIC_COMMENTS_POLLING=true`).
-
-**Current implementation gap:** the backend does not emit these events and the
-comments panel does not poll. Other clients' comment changes appear only after
-the comments are loaded again.
+### 9.4 Updates
+Comments are loaded when the panel opens. Changes made by other users appear after the panel is reopened; comment changes are not synchronized live.
 
 ---
 
@@ -537,25 +509,13 @@ the comments are loaded again.
 - "Save version" opens a small dialog: optional label input (placeholder "e.g. Before client review"), button "Save". Calls `POST /pages/:pageId/snapshots`.
 
 ### 10.2 Preview mode
-Selecting a snapshot puts the editor area in **preview mode**:
-- Fetch `GET /pages/:pageId/snapshots/:snapshotId`, decode `document_state` (base64 from API → `Uint8Array`) into a **temporary, detached `Y.Doc`**, and render it in a second **read-only** Tiptap instance (no provider, no cursors, no toolbar).
-- A banner at the top of the canvas (accent-subtle background): "Viewing version from {date, time} · by {name}" with buttons **Restore this version** (Admin+) and **Back to current** (also `Esc`).
-- Live editing, presence cursors and comments highlights are hidden while previewing. The live Yjs connection stays open in the background.
+Selecting a snapshot loads its state into a detached Yjs document and displays a read-only preview in the history panel. Use "Back to current" to return to the snapshot list.
 
 ### 10.3 Restore
 - Click "Restore this version" → confirm dialog: "Restore this version? It will replace the current document." Buttons: Cancel, Restore.
-- Calls `POST /pages/:pageId/snapshots/:snapshotId/restore`. While pending, the button shows a spinner and the dialog stays open.
-- On success: close preview, toast "Version restored", refetch snapshots, and **reload the Yjs provider** (destroy and recreate the `Y.Doc` and `WebsocketProvider`, since the server replaced the document state). All collaborators must receive the restore: handle the server closing the room/connection with a "restored" signal by recreating the provider and showing a toast "This page was restored to an earlier version."
-- Errors show a toast with a Retry option.
+- Calls `POST /pages/:pageId/snapshots/:snapshotId/restore` after confirmation. On success, the page reloads and reconnects to the restored document state. Errors appear in the history panel.
 
 ---
-
-## 11. Share dialog
-
-Opened from the top bar Share button. It reflects **workspace-level** access (the data model has no page-level permissions), and must say so in plain text: "Everyone in {workspace} can access this page based on their role."
-- Section 1: **Copy link** button (copies the current page URL).
-- Section 2 (Admin+): "Invite people" — email + role select + Send invite (same logic as 7.8, result shows copyable invite link).
-- Section 3: "People with access" — list of members (avatar, name, role), max height with scroll, link "Manage members" → members settings. Non-Admins see the list read-only.
 
 ---
 
@@ -565,7 +525,7 @@ Build these as reusable components under `apps/web/components/`. Props are indic
 
 **Layout:** `AppShell`, `TopBar`, `Breadcrumb`, `QuickSwitcher`, `SidePanel` (container for comments/history; Sheet on mobile), `SettingsTabs`. Sidebar components are listed in Section 6.2.10.
 
-**Editor:** `PageTitleInput`, `CollaborativeEditor` (owns Y.Doc + provider lifecycle), `EditorToolbar`, `ToolbarButton`, `BlockTypeSelect`, `LinkPopover`, `SlashMenu`, `CommentSelectionButton`, `ReadOnlyEditor` (for version preview), `EditorSkeleton`, `ConnectionBanner`.
+**Editor:** `PageTitleInput`, `CollaborativeEditor` (owns Y.Doc + provider lifecycle), `EditorToolbar`, `ToolbarButton`, `ReadOnlyEditor` (for version preview), `EditorSkeleton`, `ConnectionBanner`.
 
 **Collaboration UI:** `PresenceAvatars`, `PresencePopover`, `SyncStatus`, `UserAvatar` (initials fallback + color ring), `RemoteCursorLabel` (extension render fn).
 
@@ -573,22 +533,18 @@ Build these as reusable components under `apps/web/components/`. Props are indic
 
 **History:** `HistoryPanel`, `SnapshotListItem`, `SaveVersionDialog`, `VersionPreviewBanner`, `RestoreConfirmDialog`.
 
-**Workspace/members:** `CreateWorkspaceForm`, `InviteForm`, `MembersTable`, `RoleSelect`, `PendingInvitationsList`, `ShareDialog`, `ConfirmDialog` (generic, supports "type name to confirm"), `InviteLinkField` (read-only input + copy).
+**Workspace/members:** `CreateWorkspaceForm`, `InviteForm`, `MembersTable`, `RoleSelect`, `PendingInvitationsList`, `ConfirmDialog` (generic, supports "type name to confirm"), `InviteLinkField` (read-only input + copy).
 
-**Feedback:** `EmptyState`, `ErrorState`, `PageSkeleton`, `Toaster` wrapper, `Kbd` (shortcut chip).
-
-**Feature hooks (`hooks/`):** `useAuth`, `useWorkspaces`, `useWorkspace(id)`, `usePages(workspaceId)`, `usePage(id)`, `useMembers`, `useInvitations`, `useComments(pageId)`, `useSnapshots(pageId)`, `usePermissions(role)`, `useCollabProvider(pageId)` (returns `{ doc, provider, status, awarenessUsers }`), `useDebouncedCallback`, `useHotkeys`.
+**Feedback:** `EmptyState`, `ErrorState`, `PageSkeleton`, `Kbd` (shortcut chip).
 
 ---
 
 ## 13. Data layer
 
-- `lib/api.ts`: thin `fetch` wrapper, base `/api/v1`, `credentials: "include"`, JSON in/out, throws a typed `ApiError { status, code, message }`. Global 401 handler.
-- Query keys: `["me"]`, `["workspaces"]`, `["workspace", id]`, `["pages", workspaceId]`, `["page", id]`, `["members", workspaceId]`, `["invitations", workspaceId]`, `["comments", pageId]`, `["snapshots", pageId]`.
-- Mutations invalidate the relevant keys; optimistic updates for: page rename, role change, resolve/reopen comment, delete page.
-- Defaults: `staleTime` 30s; refetch on window focus on (this keeps page titles roughly fresh between collaborators).
+- `lib/client-api.ts`: thin `fetch` wrapper for `/api/v1`, sends credentials and JSON, and exposes typed API errors.
+- Feature components load server data with the API client and local React state. Mutations update local state where needed.
 - WebSocket URL from env `NEXT_PUBLIC_COLLAB_URL`. Provider: `new WebsocketProvider(COLLAB_URL, pageId, ydoc, { params: { token } })`. Token from the auth endpoint (see gaps).
-- Environment variables: `NEXT_PUBLIC_API_URL` (default `/api/v1`), `NEXT_PUBLIC_COLLAB_URL`, `NEXT_PUBLIC_COMMENTS_POLLING`.
+- Environment variable: `NEXT_PUBLIC_COLLAB_URL`.
 
 ---
 
@@ -598,18 +554,12 @@ Build these as reusable components under `apps/web/components/`. Props are indic
 apps/web/
 ├── app/                       # routes per Section 4
 ├── components/
-│   ├── ui/                    # shadcn primitives
-│   ├── layout/ editor/ collab/ comments/ history/ workspace/ feedback/
-├── hooks/
-├── lib/
-│   ├── api.ts  permissions.ts  colors.ts  format.ts  yjs.ts
-│   └── editor/
-│       ├── extensions.ts      # builds the extension list
-│       ├── slash-command.tsx
-│       └── comment-highlight.ts
-├── stores/ ui-store.ts        # zustand
-├── styles/ globals.css        # tokens + prose styles for the editor
-└── middleware.ts
+│   ├── workspace-frame.tsx    # workspace-scoped React Context
+│   ├── sidebar.tsx
+│   ├── page-detail.tsx
+│   └── page-side-panel.tsx
+├── lib/                       # API client, auth, schemas, permissions
+└── app/globals.css            # design tokens and component styles
 ```
 
 ---
@@ -620,24 +570,24 @@ apps/web/
 Loading (skeleton, never a blank screen), empty, error with Retry, and forbidden. Buttons showing async work show a spinner and are disabled. Destructive actions always use `ConfirmDialog`.
 
 ### 15.2 Accessibility
-Full keyboard navigation, visible focus rings, `aria-label` on icon buttons, dialogs trap focus, color is never the only state indicator (cursor labels include names; sync status includes text), contrast ≥ WCAG AA in both themes. Toolbar uses `role="toolbar"`. Slash menu uses `role="listbox"`.
+Keyboard-accessible controls, visible focus rings, `aria-label` on icon buttons, color is never the only state indicator (cursor labels include names; sync status includes text), and contrast ≥ WCAG AA in both themes. Toolbar uses `role="toolbar"`.
 
 ### 15.3 Performance
 Dynamic-import the editor and its extensions (`next/dynamic`, `ssr: false`) so non-editor pages stay light. Memoize presence rendering; throttle awareness-driven re-renders to 100ms. Virtualization is not needed in MVP.
 
 ### 15.4 Keyboard shortcuts summary
-`⌘K` quick switcher · `⌘\` toggle sidebar · `⌘⌥M` add comment on selection · `Esc` exit version preview / close panel · `⌘/` open shortcut cheat sheet dialog (simple static list) · standard text formatting shortcuts.
+`⌘K` quick switcher · `⌘\` toggle sidebar · standard text formatting shortcuts.
 
 ### 15.5 Acceptance checklist (frontend)
 - [ ] Register, login, logout, and `next` redirects work; unauthenticated users never see app routes.
 - [ ] Onboarding creates a workspace and first page.
 - [ ] Sidebar lists/creates/renames/deletes pages; reflects changes in real time on refocus.
 - [ ] Two browsers on one page: edits converge, remote cursors with names and colors are visible, presence avatars update, same-user-two-tabs shows once.
-- [ ] Killing the network: indicator shows Offline, typing continues, reconnect syncs with no data loss.
+- [ ] On reconnect, clients synchronize the in-memory Yjs document; offline edits are not retained after a reload.
 - [ ] Viewer cannot edit (no toolbar, read-only); Commenter can comment but not edit.
-- [ ] Comment create/reply/edit/delete/resolve/reopen work; highlights move correctly as the document changes; orphaned anchors handled.
+- [ ] Comment create/reply/edit/delete/resolve/reopen work.
 - [ ] Save version, browse versions, preview read-only, restore with confirmation; all collaborators land on the restored state.
-- [ ] Invitation flows: create, copy link, accept (logged in/out), expired states, revoke.
+- [ ] Invitation flows: create, copy link, accept while signed in with the invited email, expired states, revoke.
 - [ ] Members page: role changes and removals obey the permission matrix.
 - [ ] Light and dark themes both polished; mobile layout usable.
 
@@ -654,9 +604,10 @@ implemented contracts below; items marked as missing remain product gaps.
    The editor refreshes its provider token every 50 minutes while open.
 2. **`myRole` on workspace endpoints — implemented.** `GET /workspaces` and
    `GET /workspaces/:id` include `myRole`.
-3. **Pending invitation list — missing.** There is no
-   `GET /workspaces/:workspaceId/invitations`; the endpoint currently supports
-   invitation creation and revocation only.
+3. **Pending invitation lists — implemented.** Workspace owners and admins can
+   list usable workspace invitations at
+   `GET /workspaces/:workspaceId/invitations`; signed-in recipients can list
+   their own usable invitations at `GET /invitations`.
 4. **Invitation details — partial.** `GET /invitations/:token` requires a
    signed-in user whose email matches a usable invitation. It returns
    `invitation { id, email, role, expires_at }` and `workspace { id, name }`.

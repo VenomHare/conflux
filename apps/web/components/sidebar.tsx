@@ -13,7 +13,6 @@ import {
   Ellipsis,
   FileText,
   House,
-  Keyboard,
   Link2,
   LogOut,
   Mail,
@@ -812,15 +811,6 @@ export function Sidebar({
                   </button>
                 </div>
               </div>
-              <button
-                onClick={() => {
-                  setUserMenu(false);
-                  setSearchOpen(true);
-                }}
-              >
-                <Keyboard {...iconProps} /> Keyboard shortcuts{" "}
-                <span className="switcher-role">⌘/</span>
-              </button>
               <div className="menu-divider" />
               <button onClick={onLogout}>
                 <LogOut {...iconProps} /> Log out
