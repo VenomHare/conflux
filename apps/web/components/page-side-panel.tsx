@@ -9,6 +9,7 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Collaboration } from "@tiptap/extension-collaboration";
 import * as Y from "yjs";
+import { AppDialog } from "@/components/app-dialog";
 
 type CommentRecord = {
   id: string;
@@ -55,6 +56,9 @@ export function PageSidePanel({
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [selected, setSelected] = useState<SnapshotRecord | null>(null);
+  const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
+  const [commentToEdit, setCommentToEdit] = useState<CommentRecord | null>(null);
+  const [commentToDelete, setCommentToDelete] = useState<CommentRecord | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const canWrite = ["OWNER", "ADMIN", "EDITOR", "COMMENTER"].includes(role);
@@ -151,13 +155,8 @@ export function PageSidePanel({
     }
   }
   async function restore() {
-    if (
-      !selected ||
-      !window.confirm(
-        "Restore this version? It will replace the current document.",
-      )
-    )
-      return;
+    if (!selected) return;
+    setRestoreDialogOpen(false);
     console.log(
       `[restore] requested page=${pageId} snapshot=${selected.id} label=${selected.label ?? ""} created=${selected.created_at} snapshotChars=${selected.document_state?.length ?? 0} currentStateVectorBytes=${Y.encodeStateVector(doc).byteLength}`,
     );
@@ -179,6 +178,18 @@ export function PageSidePanel({
       setError(e instanceof Error ? e.message : "Could not restore version");
       setBusy(false);
     }
+  }
+  async function saveEditedComment(value?: string) {
+    if (!commentToEdit) return;
+    if (value?.trim()) {
+      await mutate(`/comments/${commentToEdit.id}`, "PATCH", { content: value });
+    }
+    setCommentToEdit(null);
+  }
+  async function deleteThread() {
+    if (!commentToDelete) return;
+    await mutate(`/comments/${commentToDelete.id}`, "DELETE");
+    setCommentToDelete(null);
   }
   const roots = comments.filter(
     (comment) =>
@@ -316,16 +327,7 @@ export function PageSidePanel({
                       <button
                         className="quiet"
                         type="button"
-                        onClick={() => {
-                          const text = window.prompt(
-                            "Edit comment",
-                            root.content,
-                          );
-                          if (text?.trim())
-                            void mutate(`/comments/${root.id}`, "PATCH", {
-                              content: text,
-                            });
-                        }}
+                        onClick={() => setCommentToEdit(root)}
                       >
                         Edit
                       </button>
@@ -335,14 +337,8 @@ export function PageSidePanel({
                       role === "OWNER") && (
                       <button
                         className="quiet"
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              "Delete this thread and its replies?",
-                            )
-                          )
-                            void mutate(`/comments/${root.id}`, "DELETE");
-                        }}
+                        type="button"
+                        onClick={() => setCommentToDelete(root)}
                       >
                         Delete
                       </button>
@@ -429,7 +425,7 @@ export function PageSidePanel({
                     className="primary"
                     type="button"
                     disabled={busy || !selected.document_state}
-                    onClick={() => void restore()}
+                    onClick={() => setRestoreDialogOpen(true)}
                   >
                     Restore version
                   </button>
@@ -439,6 +435,39 @@ export function PageSidePanel({
           )}
         </>
       )}
+      <AppDialog
+        open={restoreDialogOpen}
+        title="Restore this version?"
+        description="This will replace the current document with the selected version."
+        confirmLabel="Restore version"
+        danger
+        busy={busy}
+        onCancel={() => setRestoreDialogOpen(false)}
+        onConfirm={() => void restore()}
+      />
+      <AppDialog
+        open={commentToEdit !== null}
+        mode="input"
+        title="Edit comment"
+        description="Update the comment text."
+        label="Comment"
+        multiline
+        initialValue={commentToEdit?.content ?? ""}
+        confirmLabel="Save comment"
+        busy={busy}
+        onCancel={() => setCommentToEdit(null)}
+        onConfirm={saveEditedComment}
+      />
+      <AppDialog
+        open={commentToDelete !== null}
+        title="Delete this thread?"
+        description="This will delete the comment and all its replies."
+        confirmLabel="Delete thread"
+        danger
+        busy={busy}
+        onCancel={() => setCommentToDelete(null)}
+        onConfirm={() => void deleteThread()}
+      />
     </aside>
   );
 }

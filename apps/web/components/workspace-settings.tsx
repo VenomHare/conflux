@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useWorkspaceFrame } from "@/components/workspace-frame";
 import { api, send } from "@/lib/client-api";
+import { AppDialog } from "@/components/app-dialog";
 
 type Member = {
   id: string;
@@ -21,7 +22,14 @@ type Member = {
   joined_at: string;
   user: { id: string; name: string; email: string; avatar_url?: string | null };
 };
-type Invitation = { id: string; token: string; email: string; role: string };
+type Invitation = {
+  id: string;
+  token: string;
+  email: string;
+  role: string;
+  created_at: string;
+  expires_at: string;
+};
 
 const palette = [
   "#E11D48",
@@ -67,6 +75,7 @@ export function WorkspaceSettingsPage({
   const router = useRouter();
   const { workspace, setWorkspace, user } = useWorkspaceFrame();
   const [members, setMembers] = useState<Member[]>([]);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(section === "members");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -75,8 +84,8 @@ export function WorkspaceSettingsPage({
   const [description, setDescription] = useState(workspace.description ?? "");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("EDITOR");
-  const [sentInvitation, setSentInvitation] = useState<Invitation | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState<Member | null>(null);
   const [deleteName, setDeleteName] = useState("");
 
   useEffect(() => {
@@ -89,9 +98,17 @@ export function WorkspaceSettingsPage({
     let active = true;
     setLoading(true);
     setError("");
-    api<{ members: Member[] }>(`/workspaces/${workspaceId}/members`)
-      .then((result) => {
-        if (active) setMembers(result.members);
+    Promise.all([
+      api<{ members: Member[] }>(`/workspaces/${workspaceId}/members`),
+      ["OWNER", "ADMIN"].includes(workspace.myRole)
+        ? api<{ invitations: Invitation[] }>(`/workspaces/${workspaceId}/invitations`)
+        : Promise.resolve({ invitations: [] as Invitation[] }),
+    ])
+      .then(([memberResult, invitationResult]) => {
+        if (active) {
+          setMembers(memberResult.members);
+          setInvitations(invitationResult.invitations);
+        }
       })
       .catch((reason) => {
         if (active)
@@ -107,7 +124,7 @@ export function WorkspaceSettingsPage({
     return () => {
       active = false;
     };
-  }, [workspaceId, section]);
+  }, [workspaceId, section, workspace.myRole]);
 
   const editable = ["OWNER", "ADMIN"].includes(workspace.myRole);
   const dirty =
@@ -155,7 +172,10 @@ export function WorkspaceSettingsPage({
         `/workspaces/${workspaceId}/invitations`,
         send("POST", { email: inviteEmail, role: inviteRole }),
       );
-      setSentInvitation(result.invitation);
+      setInvitations((current) => [
+        result.invitation,
+        ...current.filter((invitation) => invitation.id !== result.invitation.id),
+      ]);
       setInviteEmail("");
       setNotice(`Invitation ready for ${result.invitation.email}.`);
     } catch (reason) {
@@ -169,12 +189,17 @@ export function WorkspaceSettingsPage({
     }
   }
 
-  async function copyInvitation() {
-    if (!sentInvitation) return;
-    await navigator.clipboard.writeText(
-      `${location.origin}/invite/${sentInvitation.token}`,
-    );
+  async function copyInvitation(token: string) {
+    await navigator.clipboard.writeText(`${location.origin}/invite/${token}`);
     setNotice("Invite link copied.");
+  }
+
+  function formatInvitationDate(value: string) {
+    return new Date(value).toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
   }
 
   async function changeRole(member: Member, role: string) {
@@ -198,8 +223,13 @@ export function WorkspaceSettingsPage({
   }
 
   async function removeMember(member: Member) {
-    if (!window.confirm(`Remove ${member.user.name} from this workspace?`))
-      return;
+    setMemberToRemove(member);
+  }
+
+  async function confirmRemoveMember() {
+    if (!memberToRemove) return;
+    const member = memberToRemove;
+    setBusy(true);
     setError("");
     try {
       await api(
@@ -210,12 +240,15 @@ export function WorkspaceSettingsPage({
         current.filter((item) => item.user.id !== member.user.id),
       );
       setNotice(`${member.user.name} was removed from the workspace.`);
+      setMemberToRemove(null);
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
           : "Member could not be removed",
       );
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -338,7 +371,8 @@ export function WorkspaceSettingsPage({
                   <label htmlFor="workspace-description">Description</label>
                   <textarea
                     id="workspace-description"
-                    rows={3}
+                    rows={4}
+                    cols={50}
                     maxLength={1000}
                     placeholder="What does your team work on?"
                     value={description}
@@ -464,16 +498,31 @@ export function WorkspaceSettingsPage({
                     <Mail size={15} /> {busy ? "Preparing…" : "Create invite"}
                   </button>
                 </form>
-                {sentInvitation && (
-                  <div className="invite-link-card">
-                    <span className="invite-link-copy">
-                      /invite/{sentInvitation.token}
-                    </span>
-                    <button onClick={() => void copyInvitation()}>
-                      <Copy size={14} /> Copy link
-                    </button>
+                <div className="workspace-invitations">
+                  <div className="workspace-invitations-heading">
+                    <h3>Pending invitations</h3>
+                    <span className="member-count">{invitations.length}</span>
                   </div>
-                )}
+                  {invitations.length ? (
+                    <div className="workspace-invitation-list">
+                      {invitations.map((invitation) => (
+                        <div className="workspace-invitation" key={invitation.id}>
+                          <div className="workspace-invitation-meta">
+                            <strong>{invitation.email}</strong>
+                            <span>
+                              {roleLabels[invitation.role]} · Expires {formatInvitationDate(invitation.expires_at)}
+                            </span>
+                          </div>
+                          <button className="secondary" type="button" onClick={() => void copyInvitation(invitation.token)}>
+                            <Copy size={14} /> Copy link
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="muted">No pending invitations.</p>
+                  )}
+                </div>
               </section>
             )}
             <section className="settings-panel member-panel">
@@ -567,6 +616,16 @@ export function WorkspaceSettingsPage({
           </p>
         )}
       </main>
+      <AppDialog
+        open={memberToRemove !== null}
+        title="Remove workspace member?"
+        description={memberToRemove ? `Remove ${memberToRemove.user.name} from this workspace?` : undefined}
+        confirmLabel="Remove member"
+        danger
+        busy={busy}
+        onCancel={() => setMemberToRemove(null)}
+        onConfirm={() => void confirmRemoveMember()}
+      />
     </section>
   );
 }

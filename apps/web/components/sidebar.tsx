@@ -16,6 +16,7 @@ import {
   Keyboard,
   Link2,
   LogOut,
+  Mail,
   Menu,
   Monitor,
   Moon,
@@ -106,6 +107,7 @@ export function Sidebar({
     pathname = usePathname(),
     workspaceId = workspace.id;
   const [toggleHost, setToggleHost] = useState<HTMLElement | null>(null);
+  const [pendingInvitationCount, setPendingInvitationCount] = useState(0);
   const [collapsed, setCollapsed] = useState(false),
     [mobileOpen, setMobileOpen] = useState(false),
     [switcher, setSwitcher] = useState(false),
@@ -143,6 +145,24 @@ export function Sidebar({
       (savedTheme === "system" &&
         matchMedia("(prefers-color-scheme: dark)").matches);
     document.documentElement.dataset.theme = dark ? "dark" : "light";
+  }, []);
+  useEffect(() => {
+    let active = true;
+    const refreshInvitations = () => {
+      api<{ invitations: { id: string }[] }>("/invitations")
+        .then(({ invitations }) => {
+          if (active) setPendingInvitationCount(invitations.length);
+        })
+        .catch(() => {
+          if (active) setPendingInvitationCount(0);
+        });
+    };
+    refreshInvitations();
+    window.addEventListener("focus", refreshInvitations);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", refreshInvitations);
+    };
   }, []);
   useEffect(() => {
     const updateHost = () => {
@@ -677,6 +697,7 @@ export function Sidebar({
       <div className="sidebar-footer">
         <button
           className="user-trigger"
+          aria-label={pendingInvitationCount ? "Account menu, pending invitations" : "Account menu"}
           aria-expanded={userMenu}
           onClick={(event) => {
             const rect = event.currentTarget.getBoundingClientRect();
@@ -706,6 +727,9 @@ export function Sidebar({
             className="switcher-chevron user-menu-chevron"
             {...iconProps}
           />
+          {pendingInvitationCount > 0 && (
+            <span className="notification-dot account-notification-dot" aria-hidden="true" />
+          )}
         </button>
         {userMenu &&
           typeof document !== "undefined" &&
@@ -744,6 +768,17 @@ export function Sidebar({
                 }
               >
                 <UserRound {...iconProps} /> Profile
+              </button>
+              <button
+                onClick={() => {
+                  setUserMenu(false);
+                  router.push(`/w/${workspaceId}/invitations`);
+                }}
+              >
+                <Mail {...iconProps} /> Pending invitations
+                {pendingInvitationCount > 0 && (
+                  <span className="notification-dot menu-notification-dot" aria-hidden="true" />
+                )}
               </button>
               <div className="theme-row">
                 <span>Theme</span>

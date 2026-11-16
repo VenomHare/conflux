@@ -4,9 +4,34 @@ import { apiError, apiResponse } from "@/lib/api";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { createInvitationSchema } from "@/lib/schemas/invitation";
 import { uuidSchema } from "@/lib/schemas/workspace";
-import { getWorkspaceManager } from "@/lib/invitations";
+import { getWorkspaceManager, invitationIsUsable } from "@/lib/invitations";
 
 export const runtime = "nodejs";
+
+export async function GET(request: Request, context: { params: Promise<{ workspaceId: string }> }) {
+  const { workspaceId } = await context.params;
+  const user = await getAuthenticatedUser(request).catch(() => null);
+  if (!user) return apiError("unauthorized", "Sign in to continue", 401);
+  if (!uuidSchema.safeParse(workspaceId).success) return apiError("validation_error", "Workspace id must be a UUID", 400);
+  const manager = await getWorkspaceManager(workspaceId, user.id).catch(() => null);
+  if (!manager) return apiError("not_found", "Workspace not found", 404);
+  if (manager.role !== "OWNER" && manager.role !== "ADMIN") {
+    return apiError("forbidden", "Only workspace owners and admins can view invitations", 403);
+  }
+
+  try {
+    const db = await getDb();
+    const invitations = await db.orm.public.Invitation.where({ workspace_id: workspaceId }).all();
+    return apiResponse({
+      invitations: invitations
+        .filter(invitationIsUsable)
+        .map(({ id, token, email, role, created_at, expires_at }) => ({ id, token, email, role, created_at, expires_at })),
+    });
+  } catch (error) {
+    console.error("Workspace invitation list failed", error);
+    return apiError("service_unavailable", "Invitations are temporarily unavailable", 503);
+  }
+}
 
 export async function POST(request: Request, context: { params: Promise<{ workspaceId: string }> }) {
   const { workspaceId } = await context.params;

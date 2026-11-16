@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { Plus } from "lucide-react";
 import { api, send } from "@/lib/client-api";
 import { useWorkspaceFrame } from "@/components/workspace-frame";
 import { dateLabel } from "@/components/date-label";
@@ -95,7 +96,15 @@ export function WorkspaceHome() {
             <p className="muted">{workspace.description}</p>
           )}
           <div className="section-heading">
-            Pages <span className="muted">{pages.length}</span>
+            <span>Pages <span className="muted">{pages.length}</span></span>
+            {editable && (
+              <button
+                className="primary pages-create-button"
+                onClick={() => setModal("create")}
+              >
+                <Plus size={16} aria-hidden="true" /> New page
+              </button>
+            )}
           </div>
           {error && (
             <div className="form-error" role="alert">
@@ -110,26 +119,9 @@ export function WorkspaceHome() {
               <div style={{ fontSize: 26, marginBottom: 12 }}>▤</div>
               <strong>No pages yet</strong>
               <p>Create your first page to start writing together.</p>
-              {editable && (
-                <button
-                  className="primary"
-                  style={{ maxWidth: 180 }}
-                  onClick={() => setModal("create")}
-                >
-                  ＋ New page
-                </button>
-              )}
             </div>
           ) : (
             <div className="cards">
-              {editable && (
-                <button
-                  className="card new-card"
-                  onClick={() => setModal("create")}
-                >
-                  <span style={{ fontSize: 22 }}>＋</span>New page
-                </button>
-              )}
               {pages.map((page) => (
                 <div className="card" key={page.id}>
                   <Link href={`/w/${id}/p/${page.id}`}>

@@ -255,8 +255,13 @@ button:active {
   outline-offset: 1px;
 }
 .field textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   height: auto;
   min-height: 80px;
+  max-height: 240px;
+  resize: none;
   padding: 8px 12px;
 }
 .field input::placeholder,
@@ -301,6 +306,7 @@ button:active {
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 .secondary {
+  width: fit-content;
   background: var(--bg);
   color: var(--text);
   border-color: var(--border);
@@ -694,6 +700,7 @@ button:active {
   margin-top: auto;
 }
 .user-trigger {
+  position: relative;
   width: 100%;
   height: 40px;
   border: 0;
@@ -707,6 +714,22 @@ button:active {
 }
 .user-trigger:hover {
   background: var(--hover);
+}
+.notification-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border: 1.5px solid var(--bg);
+  border-radius: 50%;
+  background: var(--accent);
+}
+.account-notification-dot {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+}
+.menu-notification-dot {
+  margin-left: auto;
 }
 .user-avatar {
   width: 28px;
@@ -1114,6 +1137,112 @@ button:active {
   padding: 10px 0;
   border-top: 1px solid var(--border);
 }
+.pending-invitation-list {
+  display: grid;
+}
+.pending-invitation-row {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.pending-invitation-row > .secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pending-invitation-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+.pending-invitation-info {
+  min-width: 0;
+  flex: 1;
+}
+.pending-invitation-info h3 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pending-invitation-info p {
+  margin: 4px 0 0;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.pending-invitation-empty {
+  min-height: 120px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  color: var(--text-faint);
+}
+.pending-invitation-empty p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.workspace-invitations {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.workspace-invitations-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.workspace-invitations-heading h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 550;
+}
+.workspace-invitation-list {
+  display: grid;
+}
+.workspace-invitation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.workspace-invitation > .secondary {
+  justify-self: end;
+}
+.workspace-invitation-meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.workspace-invitation-meta strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-invitation-meta span {
+  color: var(--text-faint);
+  font-size: 12px;
+}
 .member-identity {
   display: flex;
   min-width: 0;
@@ -1301,9 +1430,22 @@ button:active {
   margin: 12px 0;
 }
 .section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   font-size: 13px;
   font-weight: 500;
   margin: 38px 0 14px;
+}
+.pages-create-button {
+  width: auto;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
 }
 .cards {
   display: grid;
@@ -1949,6 +2091,48 @@ button:active {
     }
   }
 }
+@media (max-width: 640px) {
+  .pending-invitation-row {
+    min-height: 0;
+    padding: 16px 0;
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr);
+    align-items: start;
+    gap: 10px 12px;
+  }
+  .pending-invitation-row > .secondary {
+    grid-column: 2;
+    justify-self: end;
+    min-height: 40px;
+    margin: 0;
+  }
+  .pending-invitation-info h3 {
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.4;
+  }
+  .pending-invitation-info p {
+    line-height: 1.5;
+  }
+  .workspace-invitation {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+    gap: 10px;
+  }
+  .workspace-invitation > .secondary {
+    justify-self: end;
+    min-height: 40px;
+  }
+  .workspace-invitation-meta strong {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.4;
+  }
+  .workspace-invitation-meta span {
+    line-height: 1.5;
+  }
+}
 .modal-backdrop .modal {
   max-width: calc(100vw - 32px);
 }
@@ -1970,6 +2154,13 @@ button:active {
   }
   .page-heading {
     font-size: 36px;
+  }
+  .section-heading {
+    margin-top: 28px;
+  }
+  .pages-create-button {
+    min-height: 40px;
+    flex: none;
   }
   .editor-title {
     font-size: 40px;
@@ -1999,7 +2190,7 @@ button:active {
     padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
   }
   .topbar {
-    padding: 0 12px;
+    padding: 0 12px 0 48px;
   }
   .settings-content {
     padding: 40px 20px 56px;

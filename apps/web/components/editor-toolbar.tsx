@@ -1,9 +1,12 @@
 "use client";
 
 import type { Editor } from "@tiptap/react";
+import { useState } from "react";
 import { useEditorState } from "@tiptap/react";
+import { AppDialog } from "@/components/app-dialog";
 
 export function EditorToolbar({ editor }: { editor: Editor | null }) {
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const active = useEditorState({
     editor,
     selector: ({ editor: current }) => ({
@@ -20,6 +23,20 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
     }),
   });
   if (!editor || !active) return null;
+  function saveLink(value?: string) {
+    const url = value?.trim();
+    if (url) {
+      editor
+        .chain()
+        .focus()
+        .extendMarkRange("link")
+        .setLink({ href: url })
+        .run();
+    } else if (active.link) {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+    }
+    setLinkDialogOpen(false);
+  }
   const button = (
     label: string,
     title: string,
@@ -38,51 +55,58 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
     </button>
   );
   return (
-    <div
-      className="editor-toolbar-controls"
-      role="toolbar"
-      aria-label="Text formatting"
-    >
-      {button("B", "Bold", active.bold, () =>
-        editor.chain().focus().toggleBold().run(),
-      )}
-      {button("I", "Italic", active.italic, () =>
-        editor.chain().focus().toggleItalic().run(),
-      )}
-      {button("S", "Strikethrough", active.strike, () =>
-        editor.chain().focus().toggleStrike().run(),
-      )}
-      {button("</>", "Inline code", active.code, () =>
-        editor.chain().focus().toggleCode().run(),
-      )}
-      <span className="editor-toolbar-divider" />
-      {button("H1", "Heading 1", active.heading === 1, () =>
-        editor.chain().focus().toggleHeading({ level: 1 }).run(),
-      )}
-      {button("H2", "Heading 2", active.heading === 2, () =>
-        editor.chain().focus().toggleHeading({ level: 2 }).run(),
-      )}
-      {button("•", "Bulleted list", active.bulletList, () =>
-        editor.chain().focus().toggleBulletList().run(),
-      )}
-      {button("1.", "Numbered list", active.orderedList, () =>
-        editor.chain().focus().toggleOrderedList().run(),
-      )}
-      {button("❝", "Quote", active.blockquote, () =>
-        editor.chain().focus().toggleBlockquote().run(),
-      )}
-      {button("↗", "Add or edit link", active.link, () => {
-        const url = window.prompt("Paste a link");
-        if (url)
-          editor
-            .chain()
-            .focus()
-            .extendMarkRange("link")
-            .setLink({ href: url })
-            .run();
-        else if (active.link)
-          editor.chain().focus().extendMarkRange("link").unsetLink().run();
-      })}
-    </div>
+    <>
+      <div
+        className="editor-toolbar-controls"
+        role="toolbar"
+        aria-label="Text formatting"
+      >
+        {button("B", "Bold", active.bold, () =>
+          editor.chain().focus().toggleBold().run(),
+        )}
+        {button("I", "Italic", active.italic, () =>
+          editor.chain().focus().toggleItalic().run(),
+        )}
+        {button("S", "Strikethrough", active.strike, () =>
+          editor.chain().focus().toggleStrike().run(),
+        )}
+        {button("</>", "Inline code", active.code, () =>
+          editor.chain().focus().toggleCode().run(),
+        )}
+        <span className="editor-toolbar-divider" />
+        {button("H1", "Heading 1", active.heading === 1, () =>
+          editor.chain().focus().toggleHeading({ level: 1 }).run(),
+        )}
+        {button("H2", "Heading 2", active.heading === 2, () =>
+          editor.chain().focus().toggleHeading({ level: 2 }).run(),
+        )}
+        {button("•", "Bulleted list", active.bulletList, () =>
+          editor.chain().focus().toggleBulletList().run(),
+        )}
+        {button("1.", "Numbered list", active.orderedList, () =>
+          editor.chain().focus().toggleOrderedList().run(),
+        )}
+        {button("❝", "Quote", active.blockquote, () =>
+          editor.chain().focus().toggleBlockquote().run(),
+        )}
+        {button("↗", "Add or edit link", active.link, () =>
+          setLinkDialogOpen(true),
+        )}
+      </div>
+      <AppDialog
+        open={linkDialogOpen}
+        mode="input"
+        title="Add a link"
+        description="Enter the URL to attach to the selected text."
+        label="Link URL"
+        placeholder="https://example.com"
+        initialValue={
+          active.link ? String(editor.getAttributes("link").href ?? "") : ""
+        }
+        confirmLabel="Save link"
+        onCancel={() => setLinkDialogOpen(false)}
+        onConfirm={saveLink}
+      />
+    </>
   );
 }

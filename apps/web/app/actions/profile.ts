@@ -7,33 +7,20 @@ import { getAuthenticatedUser } from "@/lib/auth";
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
 function detectImage(bytes: Uint8Array) {
-  if (
-    bytes.length >= 8 &&
-    bytes[0] === 0x89 &&
-    bytes[1] === 0x50 &&
-    bytes[2] === 0x4e &&
-    bytes[3] === 0x47 &&
-    bytes[4] === 0x0d &&
-    bytes[5] === 0x0a &&
-    bytes[6] === 0x1a &&
-    bytes[7] === 0x0a
-  ) {
+  const header = String.fromCharCode(...bytes.subarray(0, 12));
+
+  if (header.startsWith("\x89PNG\r\n\x1a\n")) {
     return "image/png";
   }
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+  if (header.startsWith("\xff\xd8\xff")) {
     return "image/jpeg";
   }
-  if (
-    bytes.length >= 12 &&
-    String.fromCharCode(...bytes.subarray(0, 4)) === "RIFF" &&
-    String.fromCharCode(...bytes.subarray(8, 12)) === "WEBP"
-  ) {
+  if (header.startsWith("RIFF") && header.slice(8, 12) === "WEBP") {
     return "image/webp";
   }
   if (
-    bytes.length >= 12 &&
-    String.fromCharCode(...bytes.subarray(4, 8)) === "ftyp" &&
-    ["avif", "avis"].includes(String.fromCharCode(...bytes.subarray(8, 12)))
+    header.slice(4, 8) === "ftyp" &&
+    ["avif", "avis"].includes(header.slice(8, 12))
   ) {
     return "image/avif";
   }
