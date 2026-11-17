@@ -23,17 +23,24 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
     }),
   });
   if (!editor || !active) return null;
+  const currentEditor = editor;
+  const currentActive = active;
   function saveLink(value?: string) {
     const url = value?.trim();
     if (url) {
-      editor
+      currentEditor
         .chain()
         .focus()
         .extendMarkRange("link")
         .setLink({ href: url })
         .run();
-    } else if (active.link) {
-      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+    } else if (currentActive.link) {
+      currentEditor
+        .chain()
+        .focus()
+        .extendMarkRange("link")
+        .unsetLink()
+        .run();
     }
     setLinkDialogOpen(false);
   }

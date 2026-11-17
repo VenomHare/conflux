@@ -163,6 +163,24 @@ browsers or browser profiles and sign in as separate workspace members.
 
 ## Useful commands
 
+## Test evidence
+
+Run the API test suite from the repository root:
+
+```sh
+bun --cwd apps/web run test:api
+```
+
+It covers authentication, users, workspaces and membership, pages, invitations,
+comments, and snapshot history. The suite passed all 90 tests across 8 files:
+
+```
+ Test Files  8 passed (8)
+      Tests  90 passed (90)
+   Start at  17:24:59
+   Duration  11.73s (tests 91%, import 9%)
+```
+
 ```sh
 bun build
 bun lint

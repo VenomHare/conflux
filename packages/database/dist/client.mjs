@@ -1,5 +1,8 @@
 // src/client.ts
 import "dotenv/config";
+import { config } from "dotenv";
+import { dirname, resolve } from "path";
+import { fileURLToPath } from "url";
 import postgres from "@prisma/orm-postgres/runtime";
 import postgresStatic from "@prisma/orm-postgres/static";
 
@@ -402,6 +405,13 @@ var contract_default = {
           },
           Page: {
             fields: {
+              auto_snapshots_enabled: {
+                nullable: false,
+                type: {
+                  codecId: "pg/bool@1",
+                  kind: "scalar"
+                }
+              },
               content: {
                 nullable: false,
                 type: {
@@ -540,6 +550,9 @@ var contract_default = {
             },
             storage: {
               fields: {
+                auto_snapshots_enabled: {
+                  column: "auto_snapshots_enabled"
+                },
                 content: {
                   column: "content"
                 },
@@ -1462,6 +1475,15 @@ var contract_default = {
             },
             Page: {
               columns: {
+                auto_snapshots_enabled: {
+                  codecId: "pg/bool@1",
+                  dataType: "pg/bool",
+                  default: {
+                    kind: "literal",
+                    value: false
+                  },
+                  nullable: false
+                },
                 content: {
                   codecId: "pg/text@1",
                   dataType: "pg/text",
@@ -2063,7 +2085,7 @@ var contract_default = {
         kind: "postgres-schema"
       }
     },
-    storageHash: "fac88ae092e9d29dc6d0200383098b2892616abe3a0a8f4c797ae83af601d4c1"
+    storageHash: "5c3598beb1ec5437dbd0f9de37506fcd8e9c245dc9c136d838d8ebc7db75fe87"
   },
   execution: {
     executionHash: "5533a1044afe43121c1969c79ccebdd13b3850b4672af3aba2e649fe3929bb64",
@@ -2197,6 +2219,9 @@ var contract_default = {
 };
 
 // src/client.ts
+config({
+  path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../.env")
+});
 var staticContext = postgresStatic({
   contractJson: contract_default
 });

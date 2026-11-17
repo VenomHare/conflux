@@ -3,13 +3,13 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build", "generate"],
-      "env": ["DATABASE_URL", "AUTH_SECRET", "NEXT_PUBLIC_COLLAB_URL", "REDIS_URL"],
+      "env": ["DATABASE_URL", "AUTH_SECRET", "NEXT_PUBLIC_COLLAB_URL", "REDIS_URL", "R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_PUBLIC_URL", "VERCEL_URL", "DEBUG_MODE"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
     "check-types": {
       "dependsOn": ["^check-types", "generate"],
-      "env": ["DATABASE_URL", "AUTH_SECRET", "NEXT_PUBLIC_COLLAB_URL", "REDIS_URL"],
+      "env": ["DATABASE_URL", "AUTH_SECRET", "NEXT_PUBLIC_COLLAB_URL", "REDIS_URL", "R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_PUBLIC_URL", "VERCEL_URL", "DEBUG_MODE"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"]
     },
     "db:migrate:dev": {
@@ -39,7 +39,7 @@
     },
     "dev": {
       "dependsOn": ["generate"],
-      "env": ["DATABASE_URL", "AUTH_SECRET", "NEXT_PUBLIC_COLLAB_URL", "REDIS_URL"],
+      "env": ["DATABASE_URL", "AUTH_SECRET", "NEXT_PUBLIC_COLLAB_URL", "REDIS_URL", "R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_PUBLIC_URL", "VERCEL_URL", "DEBUG_MODE"],
       "cache": false,
       "persistent": true
     },
@@ -51,7 +51,11 @@
     },
     "lint": {
       "dependsOn": ["^lint"],
-      "env": ["DATABASE_URL", "AUTH_SECRET"]
+      "env": ["DATABASE_URL", "AUTH_SECRET", "R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_PUBLIC_URL", "VERCEL_URL", "DEBUG_MODE", "API_BASE_URL"]
+    },
+    "test:api": {
+      "dependsOn": ["^test:api"],
+      "env": ["DATABASE_URL", "AUTH_SECRET", "API_BASE_URL"]
     }
   }
 }
