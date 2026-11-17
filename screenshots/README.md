@@ -123,9 +123,3 @@ Switching between multiple workspaces.
 Quick-access menu for navigating workspace content and actions.
 
 ![Quick access menu](./18-quick-access-menu.png)
-
-## Notes
-
-- Screenshots and demos use Markdown image syntax so they display directly in the README viewer.
-- The numbers are kept in filenames to make each asset easy to reference. The sequence skips 12, and both the automatic-snapshot screenshot and snapshot-restoration video use the `10` prefix.
-- Invitation management is shown in the app; invitations are not sent by email.
