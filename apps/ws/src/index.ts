@@ -158,6 +158,7 @@ const rooms = new Map<string, Promise<Room | null>>();
 let snapshotJobRunning = false;
 const ws = new WebSocketServer({
   port: Number(process.env.PORT ?? 8008),
+  host: "0.0.0.0",
   maxPayload: MAX_MESSAGE_BYTES,
   perMessageDeflate: false,
 });

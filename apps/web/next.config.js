@@ -17,7 +17,6 @@ module.exports = {
     },
   },
   env: {
-    DATABASE_URL: process.env.DATABASE_URL,
     NEXT_PUBLIC_DEBUG_MODE: process.env.DEBUG_MODE === "true" ? "true" : "false",
   },
 };
