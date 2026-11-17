@@ -45,8 +45,10 @@ Other collaborators’ live cursors and text selections in the editor.
 ### Collaboration demo
 
 Video walkthrough of multiple people editing together in real time.
-    
-![video](./07-collaboration-demo.mp4)
+
+https://github.com/user-attachments/assets/f3535fe5-fd34-43eb-8846-f6de5b0f805b
+
+
 
 ## 08–11 · Comments and page history
 
@@ -78,7 +80,11 @@ Snapshot history for reviewing earlier page versions.
 
 Video walkthrough of restoring a page from a snapshot.
 
-![video](./10-restoring-snapshot-demo.mp4)
+
+
+https://github.com/user-attachments/assets/a78f2569-071c-4742-bd5a-d8c5f6691b85
+
+
 
 ## 13–18 · Workspace and account management
 
