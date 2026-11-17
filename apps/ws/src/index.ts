@@ -1,4 +1,6 @@
 import jwt from "jsonwebtoken";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import * as Y from "yjs";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
@@ -7,6 +9,9 @@ import * as awarenessProtocol from "y-protocols/awareness";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import { getDb } from "@repo/database";
 import { debugLog } from "./debug";
+
+const rootEnvPath = resolve(import.meta.dir, "../../../.env");
+if (existsSync(rootEnvPath)) process.loadEnvFile(rootEnvPath);
 
 const SESSION_COOKIE = "conflux_session=";
 const EDIT_ROLES = new Set(["OWNER", "ADMIN", "EDITOR"]);
@@ -541,8 +546,16 @@ async function persistRoomChanges(pageId: string, room: Room) {
 
 async function createAutomaticSnapshots() {
   const startedAt = Date.now();
-  debugLog(
-    `[snapshots] scheduler tick intervalMs=${AUTO_SNAPSHOT_INTERVAL_MS}`,
+  const formatTime = (timestamp: number) =>
+    new Date(timestamp).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    });
+  const nextTriggerAt = formatTime(startedAt + AUTO_SNAPSHOT_INTERVAL_MS);
+  console.log(
+    `[snapshots] automatic snapshot triggered at=${formatTime(startedAt)} nextTriggerAt=${nextTriggerAt}`,
   );
   if (snapshotJobRunning) {
     debugLog("[snapshots] previous run still active; this tick skipped");

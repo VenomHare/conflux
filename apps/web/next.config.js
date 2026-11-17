@@ -1,6 +1,14 @@
 /**
  * @type {import('next').NextConfig}
  */
+const fs = require("node:fs");
+const path = require("node:path");
+
+const rootEnvPath = path.resolve(__dirname, "../../.env");
+if (!process.env.DATABASE_URL && fs.existsSync(rootEnvPath)) {
+  process.loadEnvFile(rootEnvPath);
+}
+
 module.exports = {
   reactStrictMode: true,
   experimental: {

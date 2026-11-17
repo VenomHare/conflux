@@ -140,6 +140,15 @@ export function PageDetail() {
       active = false;
     };
   }, [workspaceId, pageId]);
+
+  useEffect(() => {
+    document.title = title.trim()
+      ? `${title.trim()} | Conflux`
+      : "Untitled | Conflux";
+    return () => {
+      document.title = "Conflux";
+    };
+  }, [title]);
   const extensions = useMemo(
     () => [
       StarterKit.configure({ undoRedo: false }),

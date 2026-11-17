@@ -4,7 +4,6 @@
   "private": true,
   "scripts": {
     "db:seed": "tsx src/seed.ts",
-    "db:seed:demo": "tsx src/seed.ts",
     "check-types": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0"
   },

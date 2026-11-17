@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { Eye, EyeOff } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -43,9 +44,14 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   return (
     <main className="auth-wrap">
       <section className="auth-card">
-        <div className="brand">
-          Conflux<span className="brand-dot">.</span>
-        </div>
+        <Image
+          className="brand-logo"
+          src="/logo.png"
+          alt="Conflux"
+          width={180}
+          height={60}
+          priority
+        />
         <h1>{login ? "Welcome back" : "Create your account"}</h1>
         <p className="muted">
           {login

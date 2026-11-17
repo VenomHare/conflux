@@ -1,5 +1,5 @@
 import bcrypt from "bcrypt";
-import { db } from "@repo/database";
+import { db, getDb } from "@repo/database";
 
 const workspaceName = "Conflux Demo Workspace";
 const demoUsers = [
@@ -16,12 +16,13 @@ const demoUsers = [
 ];
 
 async function seed() {
-  const password = process.env.SEED_DEMO_PASSWORD;
-  if (!password || password.length < 12) {
+  const password = process.env.SEED_DEMO_PASSWORD || "conflux-demo";
+  if (password.length < 12) {
     throw new Error(
-      "Set SEED_DEMO_PASSWORD to a local demo password of at least 12 characters before seeding",
+      "SEED_DEMO_PASSWORD must be at least 12 characters",
     );
   }
+  await getDb();
   const passwordHash = await bcrypt.hash(password, 12);
   const users = await Promise.all(
     demoUsers.map((user) =>
@@ -86,11 +87,18 @@ async function seed() {
   );
 }
 
-try {
-  await seed();
-} catch (error) {
+async function main() {
+  try {
+    await seed();
+  } catch (error) {
+    console.error("Database seeding failed:", error);
+    process.exitCode = 1;
+  } finally {
+    await db.close();
+  }
+}
+
+void main().catch((error) => {
   console.error("Database seeding failed:", error);
   process.exitCode = 1;
-} finally {
-  await db.close();
-}
+});

@@ -18,15 +18,21 @@ the result.
 - **Access control:** the collaboration service checks membership when a
   connection opens and rechecks access while it stays open.
 
+## Screenshots and demos
+
+See the [screenshots and demos](screenshots/README.md) for a visual walkthrough
+of account setup, editing and collaboration, comments, snapshots, and workspace
+management.
+
 ## How the system works
 
 ```mermaid
 flowchart TD
-    browser[Browser: Next.js editor]
-    web[apps/web: UI and HTTP APIs]
-    ws[apps/ws: Bun WebSocket service]
-    db[(PostgreSQL: durable application data)]
-    redis[(Redis: optional cache and Pub/Sub)]
+    browser["Browser: Next.js editor"]
+    web["apps/web: UI and HTTP APIs"]
+    ws["apps/ws: Bun WebSocket service"]
+    db[("PostgreSQL: durable application data")]
+    redis[("Redis: optional cache and Pub/Sub")]
 
     browser -->|HTTP| web
     browser -->|Yjs sync and presence| ws
@@ -119,17 +125,17 @@ bun db:push
 bun dev
 ```
 
-To populate a local review workspace, set `SEED_DEMO_PASSWORD` in the root
-`.env` to a password of at least 12 characters, then run:
+To populate a local review workspace, run:
 
 ```sh
 bun db:seed
 ```
 
 This creates `owner@conflux.local` and `editor@conflux.local`, a workspace,
-and a welcome page. New accounts use the password you set; reruns preserve
-existing account passwords. See [the seed package](packages/seed/README.md)
-for details.
+and a welcome page. New demo accounts use `conflux-demo` by default. Set
+`SEED_DEMO_PASSWORD` in the root `.env` to override it with a password of at
+least 12 characters. Reruns preserve existing account passwords. See
+[the seed package](packages/seed/README.md) for details.
 
 Open <http://localhost:3000>. The WebSocket service listens on port `8008` by
 default. Set `NEXT_PUBLIC_COLLAB_URL` if it runs at a different address. To

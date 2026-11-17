@@ -8,7 +8,6 @@
     "db:migrate:dev": "turbo run db:migrate:dev",
     "db:push": "turbo run db:push",
     "db:seed": "turbo run db:seed --filter=@repo/seed",
-    "db:seed:demo": "turbo run db:seed:demo --filter=@repo/seed",
     "dev": "turbo run dev",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "generate": "turbo run generate",
