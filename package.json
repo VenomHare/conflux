@@ -11,7 +11,8 @@
     "dev": "turbo run dev",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "generate": "turbo run generate",
-    "lint": "turbo run lint"
+    "lint": "turbo run lint",
+    "test:api": "cd apps/web && bun run test:api"
   },
   "devDependencies": {
     "pnpm": "12.14.0",

@@ -24,6 +24,24 @@ See the [screenshots and demos](screenshots/README.md) for a visual walkthrough
 of account setup, editing and collaboration, comments, snapshots, and workspace
 management.
 
+**Live application:** [Conflux](https://conflux-two-inky.vercel.app/)
+
+The web app is deployed, but live collaboration is currently unavailable
+because the WebSocket service is not deployed. I couldn't find a free hosting
+option for the WebSocket service.
+
+**Working demo video:** [Conflux demo](https://youtu.be/u07-9lkgEeA)
+
+## Submission materials
+
+- **Repository and setup:** This repository contains the source code and the local setup instructions below.
+- **Architecture and data/API documentation:** The architecture diagram and service responsibilities are in this README. See the [product specification](SPEC.md), [WebSocket service notes](apps/ws/README.md), and [frontend guide](apps/web/FRONTEND.md) for data, API, and implementation details.
+- **Tests and results:** The API test results are recorded under [Test evidence](#test-evidence): 90 passing tests across 8 files. Build, lint, type-check, and seed commands are also listed there. No performance or accuracy benchmark is claimed.
+- **Final presentation (10 minutes):** Cover the collaboration problem, design and architecture, implementation challenges, demo and test results, current limitations, and next steps. The linked demo video and this README provide a presentation outline.
+- **Individual reflection:** Each intern should include their own short reflection in the presentation or submission, describing what they learned, what they personally owned, and what they would improve next. For this project, useful areas include real-time synchronization, persistence, access control, and collaboration reliability.
+
+**Development attribution:** Conflux was built with OpenAI Codex using prompts directed by me. I reviewed and verified the implementation and demo flows.
+
 ## How the system works
 
 ```mermaid

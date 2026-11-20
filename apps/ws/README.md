@@ -58,12 +58,23 @@ default is `10000`; outside Render, the app defaults to `8008`). Do not set
 supports WebSocket connections on web services, so set the web app's
 `NEXT_PUBLIC_COLLAB_URL` to `wss://<your-render-service-host>`.
 
-For a local smoke run, export the required variables first, then start it with:
+`docker run -e NAME` forwards a variable from your shell; it does not read the
+`.env` file automatically. Load your local environment first, then start the
+container:
 
 ```sh
+set -a
+. ./.env
+set +a
+
 docker run --name conflux-ws --restart unless-stopped -p 8008:8008 \
   -e AUTH_SECRET -e DATABASE_URL -e REDIS_URL conflux-ws
 ```
+
+Make sure `DATABASE_URL` points to a database address reachable from the
+container. `localhost` inside the container refers to the container itself;
+for a database running on your host, use `host.docker.internal` (and on Linux
+add `--add-host=host.docker.internal:host-gateway` to `docker run`).
 
 Run one WebSocket process for reliable collaboration. Each process keeps its
 active rooms in memory. Redis Pub/Sub relays updates between processes, but
